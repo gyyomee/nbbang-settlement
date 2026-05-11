@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+    background: #f2e8d3;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 32rem),
+      linear-gradient(180deg, #f4ead6 0%, #ead9b9 100%);
+    color: #312a21;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    overflow-wrap: anywhere;
+    word-break: keep-all;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .receipt-shell {
+    @apply mx-auto flex min-h-screen w-full max-w-[560px] flex-col px-4 py-5 sm:py-8;
+  }
+
+  .receipt-card {
+    @apply relative w-full bg-receipt-paper px-4 py-5 text-receipt-ink shadow-receipt sm:px-6 sm:py-7;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc(100% - 10px),
+      96% 100%,
+      92% calc(100% - 10px),
+      88% 100%,
+      84% calc(100% - 10px),
+      80% 100%,
+      76% calc(100% - 10px),
+      72% 100%,
+      68% calc(100% - 10px),
+      64% 100%,
+      60% calc(100% - 10px),
+      56% 100%,
+      52% calc(100% - 10px),
+      48% 100%,
+      44% calc(100% - 10px),
+      40% 100%,
+      36% calc(100% - 10px),
+      32% 100%,
+      28% calc(100% - 10px),
+      24% 100%,
+      20% calc(100% - 10px),
+      16% 100%,
+      12% calc(100% - 10px),
+      8% 100%,
+      4% calc(100% - 10px),
+      0 100%
+    );
+  }
+
+  .receipt-section {
+    @apply border-t border-dashed border-receipt-line pt-5;
+  }
+
+  .label {
+    @apply mb-2 block text-xs font-bold uppercase tracking-[0.08em] text-receipt-muted;
+  }
+
+  .input {
+    @apply w-full rounded-none border border-receipt-line bg-white/75 px-3 py-3 text-base text-receipt-ink outline-none transition focus:border-receipt-ink focus:bg-white;
+  }
+
+  .textarea {
+    @apply min-h-24 resize-y rounded-none;
+  }
+
+  .key-button {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 border border-receipt-ink bg-receipt-button px-4 py-3 text-sm font-bold text-receipt-ink shadow-key transition active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .key-button-primary {
+    @apply bg-receipt-ink text-receipt-paper;
+  }
+
+  .key-button-danger {
+    @apply border-receipt-danger bg-[#f2d6cd] text-receipt-danger;
+  }
+
+  .amount {
+    @apply text-right tabular-nums;
+  }
+
+  .tiny-button {
+    @apply inline-flex min-h-9 items-center justify-center gap-1 border border-receipt-line bg-white/70 px-2.5 py-2 text-xs font-bold text-receipt-ink shadow-key active:translate-y-0.5 active:shadow-none;
+  }
+}

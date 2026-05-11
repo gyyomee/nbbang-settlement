@@ -1,0 +1,128 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function validSettlementCode(code) {
+      return code.matches('^[A-HJ-NP-Z2-9]{8}$');
+    }
+
+    function settlementPath(code) {
+      return /databases/$(database)/documents/settlements/$(code);
+    }
+
+    function isOpenSettlement(code) {
+      return getAfter(settlementPath(code)).data.status == 'open'
+        && getAfter(settlementPath(code)).data.expiresAt > request.time;
+    }
+
+    function isExistingOpenSettlement(code) {
+      return exists(settlementPath(code))
+        && get(settlementPath(code)).data.status == 'open'
+        && get(settlementPath(code)).data.expiresAt > request.time;
+    }
+
+    function isValidExpenseData(data, expenseId) {
+      return data.keys().hasOnly([
+          'id',
+          'payerId',
+          'payerName',
+          'amount',
+          'description',
+          'expenseDate',
+          'targetParticipantIds',
+          'targetParticipantNames',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id == expenseId
+        && data.payerId is string
+        && data.payerName is string
+        && data.amount is number
+        && data.amount > 0
+        && data.description is string
+        && data.expenseDate is string
+        && data.targetParticipantIds is list
+        && data.targetParticipantIds.size() > 0
+        && data.targetParticipantNames is list
+        && data.targetParticipantNames.size() == data.targetParticipantIds.size()
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /settlements/{settlementCode} {
+      allow read: if validSettlementCode(settlementCode);
+
+      allow create: if validSettlementCode(settlementCode)
+        && request.resource.data.keys().hasOnly([
+          'settlementCode',
+          'settlementName',
+          'createdAt',
+          'updatedAt',
+          'expiresAt',
+          'status'
+        ])
+        && request.resource.data.settlementCode == settlementCode
+        && request.resource.data.settlementName is string
+        && request.resource.data.settlementName.size() > 0
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.status == 'open';
+
+      allow update: if validSettlementCode(settlementCode)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'settlementName',
+          'updatedAt',
+          'expiresAt',
+          'status'
+        ])
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.status in ['open', 'settled', 'closed'];
+
+      allow delete: if validSettlementCode(settlementCode)
+        && resource.data.status == 'open'
+        && resource.data.expiresAt > request.time;
+
+      match /participants/{participantId} {
+        allow read: if validSettlementCode(settlementCode);
+
+        allow create: if validSettlementCode(settlementCode)
+          && isOpenSettlement(settlementCode)
+          && request.resource.data.keys().hasOnly([
+            'id',
+            'name',
+            'nameKey',
+            'joinedAt',
+            'createdAt',
+            'updatedAt'
+          ])
+          && request.resource.data.id == participantId
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.nameKey is string
+          && request.resource.data.nameKey.size() > 0
+          && request.resource.data.joinedAt is timestamp
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp;
+
+        allow update: if false;
+        allow delete: if validSettlementCode(settlementCode) && isExistingOpenSettlement(settlementCode);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if validSettlementCode(settlementCode);
+
+        allow create: if validSettlementCode(settlementCode)
+          && isOpenSettlement(settlementCode)
+          && isValidExpenseData(request.resource.data, expenseId);
+
+        allow update: if validSettlementCode(settlementCode)
+          && isExistingOpenSettlement(settlementCode)
+          && isValidExpenseData(request.resource.data, expenseId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if validSettlementCode(settlementCode) && isExistingOpenSettlement(settlementCode);
+      }
+    }
+  }
+}
