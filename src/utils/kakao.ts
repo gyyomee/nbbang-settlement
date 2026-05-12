@@ -73,6 +73,21 @@ export async function shareKakao({
   buttonTitle: string;
   url: string;
 }) {
+  console.log("=== Kakao Share Debug Log ===");
+  console.log("1. window.location.origin:", window.location.origin);
+  console.log("2. import.meta.env.BASE_URL:", import.meta.env.BASE_URL);
+  console.log("3. 실제 공유 URL:", url);
+  console.log(
+    "4. VITE_KAKAO_JAVASCRIPT_KEY 존재 여부:",
+    !!import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY,
+  );
+  console.log("5. window.Kakao 존재 여부:", !!window.Kakao);
+  console.log(
+    "6. window.Kakao.isInitialized() 결과:",
+    window.Kakao?.isInitialized() ?? false,
+  );
+  console.log("===============================");
+
   if (!import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY) {
     throw new Error("VITE_KAKAO_JAVASCRIPT_KEY가 설정되지 않았어요.");
   }
@@ -84,7 +99,7 @@ export async function shareKakao({
     content: {
       title,
       description,
-      imageUrl: "https://developers.kakao.com/assets/img/about/logos/kakaolink/kakaolink_btn_medium.png",
+      imageUrl: getAssetUrl("kakao-share.png"),
       link: {
         mobileWebUrl: url,
         webUrl: url,
@@ -124,7 +139,25 @@ function loadKakaoScript() {
     script.src = KAKAO_SDK_URL;
     script.async = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Kakao SDK 스크립트 로드에 실패했어요."));
+    script.onerror = () =>
+      reject(new Error("Kakao SDK 스크립트 로드에 실패했어요."));
     document.head.appendChild(script);
   });
+}
+
+export function getSettlementUrl(settlementCode: string) {
+  const origin = window.location.origin;
+  const baseUrl = import.meta.env.BASE_URL;
+  const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+
+  return `${origin}${cleanBaseUrl}/settlements/${settlementCode}`;
+}
+
+export function getAssetUrl(path: string) {
+  const origin = window.location.origin;
+  const baseUrl = import.meta.env.BASE_URL;
+  const cleanBaseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  return `${origin}${cleanBaseUrl}${cleanPath}`;
 }
