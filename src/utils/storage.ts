@@ -1,6 +1,12 @@
 import type { SettlementHistoryItem } from "../types";
+import {
+  DEFAULT_LANGUAGE,
+  isSupportedLanguage,
+  type Language,
+} from "../i18n";
 
 const HISTORY_KEY = "settlement_history";
+const LANGUAGE_KEY = "settlement_language";
 const MAX_HISTORY_ITEMS = 10;
 
 function canUseLocalStorage() {
@@ -33,6 +39,26 @@ export function removeCurrentParticipantId(settlementCode: string) {
   }
 
   window.localStorage.removeItem(getCurrentParticipantStorageKey(settlementCode));
+}
+
+export function getStoredLanguage(): Language {
+  if (!canUseLocalStorage()) {
+    return DEFAULT_LANGUAGE;
+  }
+
+  const storedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
+
+  return storedLanguage && isSupportedLanguage(storedLanguage)
+    ? storedLanguage
+    : DEFAULT_LANGUAGE;
+}
+
+export function setStoredLanguage(language: Language) {
+  if (!canUseLocalStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(LANGUAGE_KEY, language);
 }
 
 export function getSettlementHistory(): SettlementHistoryItem[] {

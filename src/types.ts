@@ -40,6 +40,7 @@ export interface SettlementHistoryItem {
   participantName: string;
   joinedAt: string;
   lastVisitedAt: string;
+  expiresAt?: string;
 }
 
 export interface SettlementBalance {

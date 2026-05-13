@@ -1,3 +1,4 @@
+import { settlementResultTranslations, useCurrentLanguage } from "../i18n";
 import type { SettlementBalance, SettlementTransfer } from "../types";
 import { formatCurrency } from "../utils/format";
 import KakaoSettlementShareButton from "./KakaoSettlementShareButton";
@@ -9,12 +10,15 @@ export default function SettlementResult({
   balances: SettlementBalance[];
   transfers: SettlementTransfer[];
 }) {
+  const language = useCurrentLanguage();
+  const t = settlementResultTranslations[language];
+
   return (
     <section className="receipt-section space-y-5">
       <div>
-        <h2 className="text-base font-black">최종 정산 결과</h2>
+        <h2 className="text-base font-black">{t.title}</h2>
         <p className="mt-1 text-xs leading-5 text-receipt-muted">
-          나머지 금액은 결제자가 부담하도록 계산했어요.
+          {t.remainderNote}
         </p>
       </div>
 
@@ -28,23 +32,32 @@ export default function SettlementResult({
               <p className="min-w-0 truncate text-sm font-black">
                 {balance.participantName}
               </p>
-              <p
-                className={`amount text-sm font-black ${
-                  balance.balance > 0
-                    ? "text-receipt-success"
-                    : balance.balance < 0
-                      ? "text-receipt-danger"
-                      : "text-receipt-muted"
-                }`}
-              >
-                {balance.balance > 0 ? "+" : ""}
-                {formatCurrency(balance.balance)}
-              </p>
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] font-bold text-receipt-muted">
+                  {getBalanceAmountLabel(balance.balance, t)}
+                </p>
+                <p
+                  className={`amount text-sm font-black ${
+                    balance.balance > 0
+                      ? "text-receipt-success"
+                      : balance.balance < 0
+                        ? "text-receipt-danger"
+                        : "text-receipt-muted"
+                  }`}
+                >
+                  {balance.balance > 0 ? "+" : ""}
+                  {formatCurrency(balance.balance, language)}
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs text-receipt-muted">
-              <span>결제 {formatCurrency(balance.paidAmount)}</span>
+              <span>
+                {t.paidAmountLabel}{" "}
+                {formatCurrency(balance.paidAmount, language)}
+              </span>
               <span className="amount">
-                각자 {formatCurrency(balance.owedAmount)}
+                {t.owedAmountLabel}{" "}
+                {formatCurrency(balance.owedAmount, language)}
               </span>
             </div>
           </div>
@@ -52,10 +65,10 @@ export default function SettlementResult({
       </div>
 
       <div className="border-t border-dashed border-receipt-line pt-4">
-        <h3 className="mb-3 text-sm font-black">송금할 내역</h3>
+        <h3 className="mb-3 text-sm font-black">{t.transfersTitle}</h3>
         {transfers.length === 0 ? (
           <p className="text-sm leading-6 text-receipt-muted">
-            정산할 금액이 없습니다.
+            {t.noTransfers}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -69,7 +82,7 @@ export default function SettlementResult({
                   <strong>{transfer.toName}</strong>
                 </span>
                 <span className="amount font-black">
-                  {formatCurrency(transfer.amount)}
+                  {formatCurrency(transfer.amount, language)}
                 </span>
               </li>
             ))}
@@ -80,4 +93,19 @@ export default function SettlementResult({
       <KakaoSettlementShareButton transfers={transfers} />
     </section>
   );
+}
+
+function getBalanceAmountLabel(
+  balance: number,
+  translations: (typeof settlementResultTranslations)["ko"],
+) {
+  if (balance > 0) {
+    return translations.receivableAmountLabel;
+  }
+
+  if (balance < 0) {
+    return translations.payableAmountLabel;
+  }
+
+  return translations.settledAmountLabel;
 }

@@ -1,5 +1,18 @@
-import { CheckSquare, Pencil, Save, Square, Trash2, X } from "lucide-react";
+import {
+  CheckSquare,
+  Pencil,
+  Plus,
+  Save,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react";
 import { FormEvent, useState } from "react";
+import {
+  expenseListTranslations,
+  type Language,
+  useCurrentLanguage,
+} from "../i18n";
 import type { Expense, Participant } from "../types";
 import { formatCurrency, formatDateLabel } from "../utils/format";
 import { toPositiveInteger } from "../utils/validation";
@@ -12,17 +25,31 @@ export interface ExpenseEditValues {
   targetParticipantIds: string[];
 }
 
+type ExpenseListErrorKey =
+  | "payerRequired"
+  | "amountRequired"
+  | "targetsRequired"
+  | "updateExpenseFailed";
+
+type ExpenseListError = { key: ExpenseListErrorKey } | { message: string };
+
 export default function ExpenseList({
   expenses,
   participants,
+  onAddExpense,
+  addExpenseDisabled = false,
   onUpdate,
   onDelete,
 }: {
   expenses: Expense[];
   participants: Participant[];
+  onAddExpense?: () => void;
+  addExpenseDisabled?: boolean;
   onUpdate: (expenseId: string, values: ExpenseEditValues) => Promise<void>;
   onDelete: (expenseId: string) => Promise<void>;
 }) {
+  const language = useCurrentLanguage();
+  const t = expenseListTranslations[language];
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editExpenseDate, setEditExpenseDate] = useState("");
   const [editPayerId, setEditPayerId] = useState("");
@@ -31,7 +58,7 @@ export default function ExpenseList({
   const [editTargetParticipantIds, setEditTargetParticipantIds] = useState<
     string[]
   >([]);
-  const [editError, setEditError] = useState("");
+  const [editError, setEditError] = useState<ExpenseListError | null>(null);
   const [savingExpenseId, setSavingExpenseId] = useState<string | null>(null);
   const groupedExpenses = expenses.reduce<Record<string, Expense[]>>(
     (groups, expense) => {
@@ -52,12 +79,12 @@ export default function ExpenseList({
     setEditAmount(String(expense.amount));
     setEditDescription(expense.description);
     setEditTargetParticipantIds(expense.targetParticipantIds);
-    setEditError("");
+    setEditError(null);
   }
 
   function cancelEditing() {
     setEditingExpenseId(null);
-    setEditError("");
+    setEditError(null);
   }
 
   function toggleEditTarget(participantId: string) {
@@ -79,22 +106,22 @@ export default function ExpenseList({
     const parsedAmount = toPositiveInteger(editAmount);
 
     if (!editPayerId) {
-      setEditError("결제자를 선택해주세요.");
+      setEditError({ key: "payerRequired" });
       return;
     }
 
     if (!parsedAmount) {
-      setEditError("금액을 1원 이상 입력해주세요.");
+      setEditError({ key: "amountRequired" });
       return;
     }
 
     if (editTargetParticipantIds.length === 0) {
-      setEditError("정산 대상자를 1명 이상 선택해주세요.");
+      setEditError({ key: "targetsRequired" });
       return;
     }
 
     try {
-      setEditError("");
+      setEditError(null);
       setSavingExpenseId(expenseId);
       await onUpdate(expenseId, {
         payerId: editPayerId,
@@ -107,8 +134,8 @@ export default function ExpenseList({
     } catch (error) {
       setEditError(
         error instanceof Error
-          ? error.message
-          : "결제 내역을 수정하지 못했어요.",
+          ? { message: error.message }
+          : { key: "updateExpenseFailed" },
       );
     } finally {
       setSavingExpenseId(null);
@@ -118,22 +145,36 @@ export default function ExpenseList({
   return (
     <section className="receipt-section space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-black">결제 내역</h2>
-        <span className="text-sm font-bold text-receipt-muted">
-          {expenses.length}건
-        </span>
+        <h2 className="text-base font-black">{t.title}</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-receipt-muted">
+            {t.expenseCount(expenses.length)}
+          </span>
+          {onAddExpense ? (
+            <button
+              className="tiny-button h-11 w-11 shrink-0 p-0 disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              aria-label={t.addExpenseButton}
+              title={t.addExpenseButton}
+              onClick={onAddExpense}
+              disabled={addExpenseDisabled}
+            >
+              <Plus size={18} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {expenses.length === 0 ? (
         <p className="text-sm leading-6 text-receipt-muted">
-          아직 추가된 결제 내역이 없어요.
+          {t.emptyMessage}
         </p>
       ) : (
         <div className="space-y-5">
           {dates.map((date) => (
             <div className="space-y-2" key={date}>
               <h3 className="border-b border-dashed border-receipt-line pb-2 text-xs font-black text-receipt-muted">
-                {formatDateLabel(date)}
+                {formatExpenseListDateLabel(date, language)}
               </h3>
               <ul className="space-y-2">
                 {groupedExpenses[date].map((expense) => {
@@ -157,7 +198,7 @@ export default function ExpenseList({
                               className="label"
                               htmlFor={`edit-date-${expense.id}`}
                             >
-                              결제 날짜
+                              {t.expenseDateLabel}
                             </label>
                             <input
                               className="input"
@@ -176,7 +217,7 @@ export default function ExpenseList({
                               className="label"
                               htmlFor={`edit-payer-${expense.id}`}
                             >
-                              결제자
+                              {t.payerLabel}
                             </label>
                             <select
                               className="input"
@@ -203,7 +244,7 @@ export default function ExpenseList({
                               className="label"
                               htmlFor={`edit-amount-${expense.id}`}
                             >
-                              금액
+                              {t.amountLabel}
                             </label>
                             <input
                               className="input amount"
@@ -222,7 +263,7 @@ export default function ExpenseList({
                               className="label"
                               htmlFor={`edit-description-${expense.id}`}
                             >
-                              상세내역
+                              {t.descriptionLabel}
                             </label>
                             <textarea
                               className="input textarea"
@@ -237,7 +278,9 @@ export default function ExpenseList({
 
                           <div className="space-y-3">
                             <div className="flex items-center justify-between gap-3">
-                              <span className="label mb-0">정산 대상자</span>
+                              <span className="label mb-0">
+                                {t.targetParticipantsLabel}
+                              </span>
                               <div className="flex shrink-0 gap-2">
                                 <button
                                   className="tiny-button"
@@ -252,7 +295,7 @@ export default function ExpenseList({
                                   disabled={saving || participants.length === 0}
                                 >
                                   <CheckSquare size={14} aria-hidden="true" />
-                                  전체 선택
+                                  {t.selectAllTargetsButton}
                                 </button>
                                 <button
                                   className="tiny-button"
@@ -266,7 +309,7 @@ export default function ExpenseList({
                                   }
                                 >
                                   <Square size={14} aria-hidden="true" />
-                                  전체 해제
+                                  {t.clearAllTargetsButton}
                                 </button>
                               </div>
                             </div>
@@ -298,7 +341,7 @@ export default function ExpenseList({
 
                           {editError ? (
                             <p className="text-sm leading-6 text-receipt-danger">
-                              {editError}
+                              {getExpenseListErrorText(editError, t)}
                             </p>
                           ) : null}
 
@@ -309,7 +352,7 @@ export default function ExpenseList({
                               disabled={saving}
                             >
                               <Save size={16} aria-hidden="true" />
-                              {saving ? "저장 중" : "수정 저장"}
+                              {saving ? t.savingButton : t.saveEditButton}
                             </button>
                             <button
                               className="key-button"
@@ -318,7 +361,7 @@ export default function ExpenseList({
                               disabled={saving}
                             >
                               <X size={16} aria-hidden="true" />
-                              취소
+                              {t.cancelButton}
                             </button>
                           </div>
                         </form>
@@ -330,16 +373,18 @@ export default function ExpenseList({
                                 {expense.description}
                               </p>
                               <p className="mt-1 text-xs leading-5 text-receipt-muted">
-                                결제: {expense.payerName}
+                                {t.paidByLine(expense.payerName)}
                               </p>
                             </div>
                             <p className="amount text-sm font-black">
-                              {formatCurrency(expense.amount)}
+                              {formatCurrency(expense.amount, language)}
                             </p>
                           </div>
                           <div className="mt-3 flex items-end justify-between gap-3">
                             <p className="min-w-0 text-xs leading-5 text-receipt-muted">
-                              대상: {expense.targetParticipantNames.join(", ")}
+                              {t.targetLine(
+                                expense.targetParticipantNames.join(", "),
+                              )}
                             </p>
                             <div className="flex shrink-0 gap-2">
                               <button
@@ -348,7 +393,7 @@ export default function ExpenseList({
                                 onClick={() => startEditing(expense)}
                               >
                                 <Pencil size={14} aria-hidden="true" />
-                                수정
+                                {t.editButton}
                               </button>
                               <button
                                 className="tiny-button"
@@ -356,7 +401,7 @@ export default function ExpenseList({
                                 onClick={() => onDelete(expense.id)}
                               >
                                 <Trash2 size={14} aria-hidden="true" />
-                                삭제
+                                {t.deleteButton}
                               </button>
                             </div>
                           </div>
@@ -372,4 +417,33 @@ export default function ExpenseList({
       )}
     </section>
   );
+}
+
+function getExpenseListErrorText(
+  error: ExpenseListError,
+  translations: (typeof expenseListTranslations)["ko"],
+) {
+  if ("message" in error) {
+    return error.message;
+  }
+
+  return translations[error.key];
+}
+
+function formatExpenseListDateLabel(dateValue: string, language: Language) {
+  if (language === "ko") {
+    return formatDateLabel(dateValue);
+  }
+
+  const date = new Date(`${dateValue}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return dateValue;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
 }

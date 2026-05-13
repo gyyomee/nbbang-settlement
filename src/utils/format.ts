@@ -11,8 +11,17 @@ const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit",
 });
 
-export function formatCurrency(amount: number) {
-  return `${currencyFormatter.format(Math.round(amount))}원`;
+export function formatCurrency(amount: number, language: "ko" | "en" = "ko") {
+  const roundedAmount = Math.round(amount);
+
+  if (language === "en") {
+    const formattedAmount = currencyFormatter.format(Math.abs(roundedAmount));
+    return roundedAmount < 0
+      ? `-KRW ${formattedAmount}`
+      : `KRW ${formattedAmount}`;
+  }
+
+  return `${currencyFormatter.format(roundedAmount)}원`;
 }
 
 export function formatDateLabel(date: string) {

@@ -14,6 +14,7 @@ import { ArrowRight, Plus, ReceiptText, X } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db, hasFirebaseConfig } from "../firebase";
+import { homeTranslations, useCurrentLanguage } from "../i18n";
 import type { Participant, Settlement, SettlementHistoryItem } from "../types";
 import { formatDateTime } from "../utils/format";
 import {
@@ -27,22 +28,36 @@ import {
   setCurrentParticipantId,
   upsertSettlementHistory,
 } from "../utils/storage";
-import { getNameKey, normalizeName } from "../utils/validation";
+import {
+  PARTICIPANT_NAME_MAX_LENGTH,
+  getNameKey,
+  isValidParticipantName,
+  normalizeName,
+} from "../utils/validation";
 import { createClientId } from "../utils/id";
 
 interface PendingJoin {
   settlement: Settlement;
   participant: Participant;
-  participantName: string;
+}
+
+interface JoinPreview {
+  settlement: Settlement;
+  participants: Participant[];
 }
 
 type HomeMode = "create" | "join" | null;
-
-const FIREBASE_CONFIG_ERROR =
-  "Firebase 설정이 아직 없어서 정산을 저장할 수 없어요. .env에 Firebase 값을 넣고 개발 서버를 다시 시작해주세요.";
+type HomeTranslation = (typeof homeTranslations)["ko"];
+const SETTLEMENT_EXPIRATION_DAYS = 90;
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const language = useCurrentLanguage();
+  const t = homeTranslations[language];
+  const checkingPreviewMessage =
+    language === "ko"
+      ? "정산 정보를 확인하는 중..."
+      : "Checking split information...";
   const [settlementName, setSettlementName] = useState("");
   const [myName, setMyName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -50,11 +65,15 @@ export default function HomePage() {
     getSettlementHistory(),
   );
   const [error, setError] = useState("");
+  const [joinPreview, setJoinPreview] = useState<JoinPreview | null>(null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
   const [loadingAction, setLoadingAction] = useState<
-    "create" | "join" | "existing" | "new" | null
+    "create" | "check" | "join" | "existing" | null
   >(null);
   const [mode, setMode] = useState<HomeMode>(null);
+  const visibleHistory = history.filter(
+    (item) => !isExpiredHistoryItem(item),
+  );
 
   async function handleCreateSettlement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,23 +82,29 @@ export default function HomePage() {
     const participantName = normalizeName(myName);
 
     if (!normalizedSettlementName) {
-      setError("정산 이름을 입력해주세요.");
+      setError(t.settlementNameRequired);
       return;
     }
 
     if (!participantName) {
-      setError("내 이름을 입력해주세요.");
+      setError(t.myNameRequired);
+      return;
+    }
+
+    if (!isValidParticipantName(participantName)) {
+      setError(t.myNameMaxLength(PARTICIPANT_NAME_MAX_LENGTH));
       return;
     }
 
     if (!hasFirebaseConfig) {
-      setError(FIREBASE_CONFIG_ERROR);
+      setError(t.firebaseConfigError);
       return;
     }
 
     try {
       setError("");
       setPendingJoin(null);
+      setJoinPreview(null);
       setLoadingAction("create");
 
       const { save, ...createdSettlement } = createSettlementWithParticipant(
@@ -93,14 +118,77 @@ export default function HomePage() {
           alert(
             getFirestoreErrorMessage(
               createError,
-              "정산을 저장하지 못했어요. 인터넷 연결을 확인하고 다시 시도해주세요.",
+              t.saveSettlementFailed,
+              t,
             ),
           );
         });
       }, 100);
     } catch (createError) {
       setError(
-        getFirestoreErrorMessage(createError, "정산을 만들지 못했어요."),
+        getFirestoreErrorMessage(createError, t.createSettlementFailed, t),
+      );
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
+  async function handleCheckSettlement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const settlementCode = normalizeSettlementCode(joinCode);
+
+    if (!isValidSettlementCode(settlementCode)) {
+      setError(t.invalidSettlementCode);
+      return;
+    }
+
+    if (!hasFirebaseConfig) {
+      setError(t.firebaseConfigError);
+      return;
+    }
+
+    if (joinPreview?.settlement.settlementCode === settlementCode) {
+      setError("");
+      setPendingJoin(null);
+      return;
+    }
+
+    try {
+      const startedAt = performance.now();
+      setError("");
+      setPendingJoin(null);
+      setJoinPreview(null);
+      setLoadingAction("check");
+
+      const [settlementDoc, participantsSnapshot] = await Promise.all([
+        getDoc(doc(db, "settlements", settlementCode)),
+        getDocs(collection(db, "settlements", settlementCode, "participants")),
+      ]);
+      const elapsedMs = Math.round(performance.now() - startedAt);
+      console.log("[join preview] loaded in", elapsedMs, "ms");
+
+      if (!settlementDoc.exists()) {
+        setError(t.settlementNotFound);
+        return;
+      }
+
+      const settlement = settlementDoc.data() as Settlement;
+
+      if (isSettlementExpired(settlement)) {
+        setError("만료된 정산입니다.");
+        return;
+      }
+
+      setJoinPreview({
+        settlement,
+        participants: participantsSnapshot.docs.map(
+          (participantDoc) => participantDoc.data() as Participant,
+        ),
+      });
+    } catch (joinError) {
+      setError(
+        getFirestoreErrorMessage(joinError, t.checkSettlementFailed, t),
       );
     } finally {
       setLoadingAction(null);
@@ -110,21 +198,25 @@ export default function HomePage() {
   async function handleJoinSettlement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const settlementCode = normalizeSettlementCode(joinCode);
+    if (!joinPreview) {
+      setError(t.joinNeedsSettlementCheck);
+      return;
+    }
+
+    if (pendingJoin) {
+      await joinAsExistingParticipant();
+      return;
+    }
+
     const participantName = normalizeName(myName);
 
     if (!participantName) {
-      setError("내 이름을 입력해주세요.");
+      setError(t.myNameRequired);
       return;
     }
 
-    if (!isValidSettlementCode(settlementCode)) {
-      setError("정산 코드는 8자리 영문 대문자와 숫자로 입력해주세요.");
-      return;
-    }
-
-    if (!hasFirebaseConfig) {
-      setError(FIREBASE_CONFIG_ERROR);
+    if (!isValidParticipantName(participantName)) {
+      setError(t.myNameMaxLength(PARTICIPANT_NAME_MAX_LENGTH));
       return;
     }
 
@@ -133,19 +225,15 @@ export default function HomePage() {
       setPendingJoin(null);
       setLoadingAction("join");
 
-      const settlementDoc = await getDoc(
-        doc(db, "settlements", settlementCode),
-      );
-
-      if (!settlementDoc.exists()) {
-        setError("존재하지 않는 정산 코드예요.");
-        return;
-      }
-
-      const settlement = settlementDoc.data() as Settlement;
+      const settlement = joinPreview.settlement;
       const sameNameSnapshot = await getDocs(
         query(
-          collection(db, "settlements", settlementCode, "participants"),
+          collection(
+            db,
+            "settlements",
+            settlement.settlementCode,
+            "participants",
+          ),
           where("nameKey", "==", getNameKey(participantName)),
           limit(1),
         ),
@@ -155,7 +243,6 @@ export default function HomePage() {
         setPendingJoin({
           settlement,
           participant: sameNameSnapshot.docs[0].data() as Participant,
-          participantName,
         });
         return;
       }
@@ -163,7 +250,7 @@ export default function HomePage() {
       await joinAsNewParticipant(settlement, participantName);
     } catch (joinError) {
       setError(
-        getFirestoreErrorMessage(joinError, "정산에 참여하지 못했어요."),
+        getFirestoreErrorMessage(joinError, t.joinSettlementFailed, t),
       );
     } finally {
       setLoadingAction(null);
@@ -182,6 +269,7 @@ export default function HomePage() {
         settlementName: pendingJoin.settlement.settlementName,
         participantId: pendingJoin.participant.id,
         participantName: pendingJoin.participant.name,
+        expiresAt: getSettlementExpiresAtIso(pendingJoin.settlement),
       });
     } finally {
       setLoadingAction(null);
@@ -222,27 +310,8 @@ export default function HomePage() {
       settlementName: settlement.settlementName,
       participantId,
       participantName,
+      expiresAt: getSettlementExpiresAtIso(settlement),
     });
-  }
-
-  async function handleJoinAsNewParticipant() {
-    if (!pendingJoin) {
-      return;
-    }
-
-    try {
-      setLoadingAction("new");
-      await joinAsNewParticipant(
-        pendingJoin.settlement,
-        pendingJoin.participantName,
-      );
-    } catch (joinError) {
-      setError(
-        getFirestoreErrorMessage(joinError, "새 참여자로 입장하지 못했어요."),
-      );
-    } finally {
-      setLoadingAction(null);
-    }
   }
 
   function enterSettlement({
@@ -250,11 +319,13 @@ export default function HomePage() {
     settlementName,
     participantId,
     participantName,
+    expiresAt,
   }: {
     settlementCode: string;
     settlementName: string;
     participantId: string;
     participantName: string;
+    expiresAt?: string;
   }) {
     const now = new Date().toISOString();
 
@@ -266,6 +337,7 @@ export default function HomePage() {
       participantName,
       joinedAt: now,
       lastVisitedAt: now,
+      expiresAt,
     });
     setHistory(getSettlementHistory());
     navigate(`/settlements/${settlementCode}`, { flushSync: true });
@@ -290,22 +362,55 @@ export default function HomePage() {
     setMode(nextMode);
     setError("");
     setPendingJoin(null);
+    setJoinPreview(null);
+  }
+
+  function updateJoinName(nextName: string) {
+    setMyName(nextName);
+
+    if (!joinPreview) {
+      setPendingJoin(null);
+      return;
+    }
+
+    const participantName = normalizeName(nextName);
+    const existingParticipant = participantName
+      ? joinPreview.participants.find(
+          (participant) =>
+            participant.nameKey === getNameKey(participantName),
+        )
+      : null;
+
+    setPendingJoin(
+      existingParticipant
+        ? {
+            settlement: joinPreview.settlement,
+            participant: existingParticipant,
+          }
+        : null,
+    );
+  }
+
+  function selectPreviewParticipant(participant: Participant) {
+    setError("");
+    updateJoinName(participant.name);
   }
 
   return (
     <main className="receipt-shell">
       <section className="receipt-card space-y-6">
         <header className="text-center">
-          <h1 className="text-3xl font-black tracking-normal">N빵 정산</h1>
+          <h1 className="text-3xl font-black tracking-normal">
+            {t.appTitle}
+          </h1>
           <p className="mt-2 text-sm leading-6 text-receipt-muted">
-            최소한의 이체로 깔끔하게 끝내는 똑똑한 정산
+            {t.appSubtitle}
           </p>
         </header>
 
         {!hasFirebaseConfig ? (
           <div className="border border-receipt-danger bg-[#f5dfd8] px-3 py-3 text-sm leading-6 text-receipt-danger">
-            Firebase 환경변수가 비어 있어요. `.env`를 설정해야 Firestore 저장이
-            동작합니다.
+            {t.firebaseConfigError}
           </div>
         ) : null}
 
@@ -316,7 +421,8 @@ export default function HomePage() {
               type="button"
               onClick={() => selectMode("create")}
             >
-              <Plus size={17} aria-hidden="true" />새 정산 만들기
+              <Plus size={17} aria-hidden="true" />
+              {t.createModeButton}
             </button>
             <button
               className={`key-button w-full ${mode === "join" ? "key-button-primary" : ""}`}
@@ -324,7 +430,7 @@ export default function HomePage() {
               onClick={() => selectMode("join")}
             >
               <ArrowRight size={17} aria-hidden="true" />
-              기존 정산 참여하기
+              {t.joinModeButton}
             </button>
           </div>
         </section>
@@ -336,18 +442,20 @@ export default function HomePage() {
           >
             <div className="flex items-center gap-2">
               <ReceiptText size={18} aria-hidden="true" />
-              <h2 className="text-base font-black">새 정산 만들기</h2>
+              <h2 className="text-base font-black">{t.createTitle}</h2>
             </div>
 
             <div>
               <label className="label" htmlFor="create-name">
-                내 이름
+                {t.myNameLabel}
               </label>
               <input
                 className="input"
                 id="create-name"
-                maxLength={5}
-                placeholder="예: 가요미 (최대 5자)"
+                maxLength={PARTICIPANT_NAME_MAX_LENGTH}
+                placeholder={t.myNamePlaceholder(
+                  PARTICIPANT_NAME_MAX_LENGTH,
+                )}
                 value={myName}
                 onChange={(event) => setMyName(event.target.value)}
               />
@@ -355,13 +463,13 @@ export default function HomePage() {
 
             <div>
               <label className="label" htmlFor="settlement-name">
-                정산 이름
+                {t.settlementNameLabel}
               </label>
               <input
                 className="input"
                 id="settlement-name"
                 maxLength={40}
-                placeholder="예: 서핑 여행"
+                placeholder={t.settlementNamePlaceholder}
                 value={settlementName}
                 onChange={(event) => setSettlementName(event.target.value)}
               />
@@ -373,87 +481,147 @@ export default function HomePage() {
               disabled={Boolean(loadingAction)}
             >
               <Plus size={17} aria-hidden="true" />
-              {loadingAction === "create" ? "만드는 중" : "새 정산 만들기"}
+              {loadingAction === "create" ? t.createLoading : t.createModeButton}
             </button>
           </form>
         ) : null}
 
         {mode === "join" ? (
-          <form
-            className="receipt-section space-y-4"
-            onSubmit={handleJoinSettlement}
-          >
+          <section className="receipt-section space-y-4">
             <div className="flex items-center gap-2">
               <ArrowRight size={18} aria-hidden="true" />
-              <h2 className="text-base font-black">기존 정산 참여하기</h2>
+              <h2 className="text-base font-black">{t.joinTitle}</h2>
             </div>
 
-            <div>
-              <label className="label" htmlFor="join-name">
-                내 이름
-              </label>
-              <input
-                className="input"
-                id="join-name"
-                maxLength={5}
-                placeholder="예: 가요미 (최대 5자)"
-                value={myName}
-                onChange={(event) => setMyName(event.target.value)}
-              />
-            </div>
+            <form className="space-y-4" onSubmit={handleCheckSettlement}>
+              <div>
+                <label className="label" htmlFor="join-code">
+                  {t.settlementCodeLabel}
+                </label>
+                <input
+                  className="input text-center text-xl font-black tracking-[0.18em]"
+                  id="join-code"
+                  maxLength={8}
+                  placeholder={t.settlementCodePlaceholder}
+                  value={joinCode}
+                  onChange={(event) => {
+                    const nextCode = normalizeSettlementCode(
+                      event.target.value,
+                    );
+                    setJoinCode(nextCode);
 
-            <div>
-              <label className="label" htmlFor="join-code">
-                정산 코드
-              </label>
-              <input
-                className="input text-center text-xl font-black tracking-[0.18em]"
-                id="join-code"
-                maxLength={8}
-                placeholder="A7K9Q2MD"
-                value={joinCode}
-                onChange={(event) =>
-                  setJoinCode(normalizeSettlementCode(event.target.value))
-                }
-              />
-            </div>
+                    if (
+                      joinPreview?.settlement.settlementCode !== nextCode
+                    ) {
+                      setJoinPreview(null);
+                      setPendingJoin(null);
+                    }
+                  }}
+                />
+              </div>
 
-            <button
-              className="key-button key-button-primary w-full"
-              type="submit"
-              disabled={Boolean(loadingAction)}
-            >
-              <ArrowRight size={17} aria-hidden="true" />
-              {loadingAction === "join" ? "확인 중" : "정산 참여하기"}
-            </button>
-          </form>
-        ) : null}
-
-        {pendingJoin ? (
-          <div className="receipt-section space-y-3">
-            <h2 className="text-base font-black">같은 이름이 있어요</h2>
-            <p className="text-sm leading-6 text-receipt-muted">
-              이미 같은 이름의 참여자가 있어요. 기존 참여자로 다시 입장할까요?
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
               <button
-                className="key-button key-button-primary"
-                type="button"
-                onClick={joinAsExistingParticipant}
+                className="key-button key-button-primary w-full"
+                type="submit"
                 disabled={Boolean(loadingAction)}
               >
-                기존 참여자로 입장
+                <ArrowRight size={17} aria-hidden="true" />
+                {loadingAction === "check"
+                  ? t.checkingSettlement
+                  : t.checkSettlementButton}
               </button>
-              <button
-                className="key-button"
-                type="button"
-                onClick={handleJoinAsNewParticipant}
-                disabled={Boolean(loadingAction)}
-              >
-                새 참여자로 입장
-              </button>
-            </div>
-          </div>
+            </form>
+
+            {loadingAction === "check" ? (
+              <p className="border border-dashed border-receipt-line bg-white/55 px-3 py-3 text-sm font-bold leading-6 text-receipt-muted">
+                {checkingPreviewMessage}
+              </p>
+            ) : null}
+
+            {joinPreview ? (
+              <div className="space-y-4 border border-receipt-line bg-white/55 p-3">
+                <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <span className="text-sm font-bold text-receipt-muted">
+                    {t.settlementNameLabel}
+                  </span>
+                  <span className="min-w-0 text-right text-sm font-black">
+                    {joinPreview.settlement.settlementName}
+                  </span>
+                  <span className="text-sm font-bold text-receipt-muted">
+                    {t.currentParticipantsLabel}
+                  </span>
+                  <span className="amount text-sm font-black">
+                    {t.participantCount(joinPreview.participants.length)}
+                  </span>
+                </div>
+
+                {joinPreview.participants.length > 0 ? (
+                  <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {joinPreview.participants.map((participant) => (
+                      <li key={participant.id}>
+                        <button
+                          className={`w-full border px-2 py-1.5 text-center text-sm font-bold shadow-key transition active:translate-y-0.5 active:shadow-none ${
+                            pendingJoin?.participant.id === participant.id
+                              ? "border-receipt-ink bg-receipt-button"
+                              : "border-receipt-line bg-receipt-paper"
+                          }`}
+                          type="button"
+                          onClick={() => selectPreviewParticipant(participant)}
+                        >
+                          {participant.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm leading-6 text-receipt-muted">
+                    {t.noParticipants}
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {joinPreview ? (
+              <form className="space-y-4" onSubmit={handleJoinSettlement}>
+                <div>
+                  <label className="label" htmlFor="join-name">
+                    {t.myNameLabel}
+                  </label>
+                  <input
+                    className="input"
+                    id="join-name"
+                    maxLength={PARTICIPANT_NAME_MAX_LENGTH}
+                    placeholder={t.myNamePlaceholder(
+                      PARTICIPANT_NAME_MAX_LENGTH,
+                    )}
+                    value={myName}
+                    onChange={(event) => {
+                      updateJoinName(event.target.value);
+                    }}
+                  />
+                </div>
+
+                {pendingJoin ? (
+                  <div className="border-t border-dashed border-receipt-line pt-3">
+                    <p className="text-xs leading-5 text-receipt-muted">
+                      {t.duplicateNameMessage}
+                    </p>
+                  </div>
+                ) : null}
+
+                <button
+                  className="key-button key-button-primary w-full"
+                  type="submit"
+                  disabled={Boolean(loadingAction)}
+                >
+                  <ArrowRight size={17} aria-hidden="true" />
+                  {loadingAction === "join" || loadingAction === "existing"
+                    ? t.joiningSettlement
+                    : t.joinSettlementButton}
+                </button>
+              </form>
+            ) : null}
+          </section>
         ) : null}
 
         {error ? (
@@ -464,19 +632,21 @@ export default function HomePage() {
 
         <section className="receipt-section space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-black">최근 참여한 정산</h2>
+            <h2 className="text-base font-black">
+              {t.recentSettlementsTitle}
+            </h2>
             <span className="text-sm font-bold text-receipt-muted">
-              {history.length}/10
+              {visibleHistory.length}/10
             </span>
           </div>
 
-          {history.length === 0 ? (
+          {visibleHistory.length === 0 ? (
             <p className="text-sm leading-6 text-receipt-muted">
-              최근 참여한 정산이 아직 없어요.
+              {t.noRecentSettlements}
             </p>
           ) : (
             <ul className="space-y-2">
-              {history.map((item) => (
+              {visibleHistory.map((item) => (
                 <li
                   className="grid grid-cols-[1fr_auto] gap-2 border border-receipt-line bg-white/55 p-3"
                   key={item.settlementCode}
@@ -497,11 +667,11 @@ export default function HomePage() {
                   <button
                     className="tiny-button self-center"
                     type="button"
-                    aria-label={`${item.settlementName} 목록에서 제외`}
+                    aria-label={t.removeFromListLabel(item.settlementName)}
                     onClick={() => handleRemoveHistoryItem(item.settlementCode)}
                   >
                     <X size={14} aria-hidden="true" />
-                    목록에서 제외
+                    {t.removeFromListButton}
                   </button>
                 </li>
               ))}
@@ -521,7 +691,10 @@ function createSettlementWithParticipant(
   const participantId = createClientId();
   const now = Timestamp.now();
   const expiresAt = Timestamp.fromDate(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    new Date(
+      now.toDate().getTime() +
+        SETTLEMENT_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
+    ),
   );
   const settlementRef = doc(db, "settlements", settlementCode);
   const participantRef = doc(
@@ -555,19 +728,38 @@ function createSettlementWithParticipant(
     settlementName,
     participantId,
     participantName,
+    expiresAt: expiresAt.toDate().toISOString(),
     save: () => batch.commit(),
   };
 }
 
-function getFirestoreErrorMessage(error: unknown, fallbackMessage: string) {
+function isSettlementExpired(settlement: Settlement) {
+  return settlement.expiresAt.toDate().getTime() <= Date.now();
+}
+
+function getSettlementExpiresAtIso(settlement: Settlement) {
+  return settlement.expiresAt.toDate().toISOString();
+}
+
+function isExpiredHistoryItem(item: SettlementHistoryItem) {
+  return item.expiresAt
+    ? new Date(item.expiresAt).getTime() <= Date.now()
+    : false;
+}
+
+function getFirestoreErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+  translations: HomeTranslation,
+) {
   const message = error instanceof Error ? error.message : "";
 
   if (message.includes("client is offline")) {
-    return "Firestore에 연결할 수 없어요. 인터넷 연결, Firebase 프로젝트의 Firestore Database 생성 여부, Firestore Rules 배포 상태를 확인해주세요.";
+    return translations.firestoreOfflineError;
   }
 
   if (message.includes("Missing or insufficient permissions")) {
-    return "Firestore 권한이 거부됐어요. firestore.rules 내용을 Firebase 콘솔 또는 Firebase CLI로 배포했는지 확인해주세요.";
+    return translations.firestorePermissionError;
   }
 
   return message || fallbackMessage;

@@ -1,5 +1,6 @@
 import { MessageCircle } from "lucide-react";
 import { useState } from "react";
+import { kakaoInviteTranslations, useCurrentLanguage } from "../i18n";
 import { shareKakao } from "../utils/kakao";
 
 export default function KakaoInviteButton({
@@ -9,19 +10,21 @@ export default function KakaoInviteButton({
   settlementName: string;
   settlementCode: string;
 }) {
+  const language = useCurrentLanguage();
+  const t = kakaoInviteTranslations[language];
   const [sharing, setSharing] = useState(false);
 
   async function handleShare() {
     try {
       setSharing(true);
       await shareKakao({
-        title: "N빵 정산에 참여해주세요.",
-        description: `정산 이름: ${settlementName}\n정산 코드: ${settlementCode}`,
-        buttonTitle: "정산 참여하기",
+        title: t.title,
+        description: `${t.settlementNameLabel}: ${settlementName}\n${t.settlementCodeLabel}: ${settlementCode}`,
+        buttonTitle: t.buttonTitle,
         url: window.location.href,
       });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "카카오톡 공유에 실패했어요.");
+      alert(error instanceof Error ? error.message : t.shareFailed);
     } finally {
       setSharing(false);
     }
@@ -30,7 +33,7 @@ export default function KakaoInviteButton({
   return (
     <button className="key-button w-full" type="button" onClick={handleShare} disabled={sharing}>
       <MessageCircle size={17} aria-hidden="true" />
-      {sharing ? "공유 준비 중" : "카카오톡으로 초대하기"}
+      {sharing ? t.sharingButton : t.inviteButton}
     </button>
   );
 }

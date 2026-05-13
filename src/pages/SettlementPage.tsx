@@ -11,11 +11,13 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
+import { Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ErrorView from "../components/ErrorView";
 import ExpenseForm, { type ExpenseFormValues } from "../components/ExpenseForm";
 import ExpenseList, { type ExpenseEditValues } from "../components/ExpenseList";
+import KakaoInviteButton from "../components/KakaoInviteButton";
 import LoadingView from "../components/LoadingView";
 import ParticipantList from "../components/ParticipantList";
 import SettlementHeader from "../components/SettlementHeader";
@@ -24,6 +26,7 @@ import { db, hasFirebaseConfig } from "../firebase";
 import { useExpenses } from "../hooks/useExpenses";
 import { useParticipants } from "../hooks/useParticipants";
 import { useSettlement } from "../hooks/useSettlement";
+import { settlementPageTranslations, useCurrentLanguage } from "../i18n";
 import type { Participant } from "../types";
 import {
   normalizeSettlementCode,
@@ -37,12 +40,23 @@ import {
   setCurrentParticipantId,
   upsertSettlementHistory,
 } from "../utils/storage";
-import { getNameKey, normalizeName } from "../utils/validation";
+import {
+  PARTICIPANT_NAME_MAX_LENGTH,
+  getNameKey,
+  getParticipantNameValidationMessage,
+  isValidParticipantName,
+  normalizeName,
+} from "../utils/validation";
 import { createClientId } from "../utils/id";
 import InvalidSettlementPage from "./InvalidSettlementPage";
 
+const SELF_DELETE_BLOCKED_MESSAGE =
+  "내 참여자 정보는 삭제할 수 없습니다. 이름 변경만 가능합니다.";
+
 export default function SettlementPage() {
   const navigate = useNavigate();
+  const language = useCurrentLanguage();
+  const t = settlementPageTranslations[language];
   const { settlementCode: settlementCodeParam } = useParams();
   const settlementCode = normalizeSettlementCode(settlementCodeParam ?? "");
   const isCodeValid = isValidSettlementCode(settlementCode);
@@ -72,6 +86,7 @@ export default function SettlementPage() {
     null,
   );
   const [deletingSettlement, setDeletingSettlement] = useState(false);
+  const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
   const currentParticipant =
     participants.find(
       (participant) => participant.id === currentParticipantId,
@@ -89,7 +104,11 @@ export default function SettlementPage() {
   }, [isCodeValid, settlementCode]);
 
   useEffect(() => {
-    if (!settlement || !currentParticipant) {
+    if (
+      !settlement ||
+      !currentParticipant ||
+      isSettlementExpired(settlement)
+    ) {
       return;
     }
 
@@ -100,6 +119,7 @@ export default function SettlementPage() {
       participantName: currentParticipant.name,
       joinedAt: new Date().toISOString(),
       lastVisitedAt: new Date().toISOString(),
+      expiresAt: settlement.expiresAt.toDate().toISOString(),
     });
   }, [currentParticipant, settlement]);
 
@@ -108,7 +128,7 @@ export default function SettlementPage() {
   }
 
   if (settlementLoading) {
-    return <LoadingView message="정산 영수증을 불러오는 중..." />;
+    return <LoadingView message={t.loadingReceipt} />;
   }
 
   if (settlementError) {
@@ -120,9 +140,22 @@ export default function SettlementPage() {
   }
 
   const activeSettlement = settlement;
+
+  if (isSettlementExpired(activeSettlement)) {
+    return (
+      <ErrorView
+        title={t.expiredTitle}
+        message={t.expiredMessage}
+      />
+    );
+  }
+
   const loadingCollections = participantsLoading || expensesLoading;
   const collectionError = participantsError || expensesError;
   const canDeleteSettlement = Boolean(currentParticipant);
+  const currentParticipantIdFromStorage = getCurrentParticipantId(
+    activeSettlement.settlementCode,
+  );
 
   async function handleJoinSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,7 +167,12 @@ export default function SettlementPage() {
     const participantName = normalizeName(joinName);
 
     if (!participantName) {
-      setJoinError("참여할 이름을 입력해주세요.");
+      setJoinError(t.joinNameRequired);
+      return;
+    }
+
+    if (!isValidParticipantName(participantName)) {
+      setJoinError(t.myNameMaxLength(PARTICIPANT_NAME_MAX_LENGTH));
       return;
     }
 
@@ -164,7 +202,7 @@ export default function SettlementPage() {
       await joinAsNewParticipant(participantName);
     } catch (error) {
       setJoinError(
-        error instanceof Error ? error.message : "참여하지 못했어요.",
+        error instanceof Error ? error.message : t.joinFailed,
       );
     } finally {
       setJoining(null);
@@ -189,6 +227,118 @@ export default function SettlementPage() {
     });
     setDuplicateParticipant(null);
     setJoining(null);
+  }
+
+  async function handleAddParticipant(participantNameValue: string) {
+    const participantName = normalizeName(participantNameValue);
+    const validationMessage =
+      getParticipantNameValidationMessage(participantName);
+
+    if (validationMessage) {
+      throw new Error(validationMessage);
+    }
+
+    const nameKey = getNameKey(participantName);
+    const sameNameSnapshot = await getDocs(
+      query(
+        collection(
+          db,
+          "settlements",
+          activeSettlement.settlementCode,
+          "participants",
+        ),
+        where("nameKey", "==", nameKey),
+        limit(1),
+      ),
+    );
+
+    if (!sameNameSnapshot.empty) {
+      throw new Error(t.duplicateParticipant);
+    }
+
+    const participantId = createClientId();
+    const now = Timestamp.now();
+    const batch = writeBatch(db);
+
+    batch.set(
+      doc(
+        db,
+        "settlements",
+        activeSettlement.settlementCode,
+        "participants",
+        participantId,
+      ),
+      {
+        id: participantId,
+        name: participantName,
+        nameKey,
+        joinedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      } satisfies Participant,
+    );
+    batch.update(doc(db, "settlements", activeSettlement.settlementCode), {
+      updatedAt: now,
+    });
+
+    await batch.commit();
+  }
+
+  async function handleUpdateParticipant(
+    participantId: string,
+    newNameValue: string,
+  ) {
+    const participantName = normalizeName(newNameValue);
+    const validationMessage =
+      getParticipantNameValidationMessage(participantName);
+
+    if (validationMessage) {
+      throw new Error(validationMessage);
+    }
+
+    const nameKey = getNameKey(participantName);
+    const sameNameSnapshot = await getDocs(
+      query(
+        collection(
+          db,
+          "settlements",
+          activeSettlement.settlementCode,
+          "participants",
+        ),
+        where("nameKey", "==", nameKey),
+        limit(1),
+      ),
+    );
+
+    if (
+      !sameNameSnapshot.empty &&
+      sameNameSnapshot.docs[0].id !== participantId
+    ) {
+      throw new Error(t.duplicateParticipant);
+    }
+
+    const now = Timestamp.now();
+    const batch = writeBatch(db);
+
+    batch.update(
+      doc(
+        db,
+        "settlements",
+        activeSettlement.settlementCode,
+        "participants",
+        participantId,
+      ),
+      {
+        name: participantName,
+        nameKey,
+        updatedAt: now,
+      },
+    );
+    batch.update(doc(db, "settlements", activeSettlement.settlementCode), {
+      updatedAt: now,
+    });
+
+    await batch.commit();
   }
 
   async function joinAsNewParticipant(
@@ -249,7 +399,7 @@ export default function SettlementPage() {
     );
 
     if (!payer || targetParticipants.length === 0) {
-      throw new Error("결제자와 정산 대상자를 다시 확인해주세요.");
+      throw new Error(t.expenseParticipantError);
     }
 
     const now = Timestamp.now();
@@ -287,7 +437,7 @@ export default function SettlementPage() {
   }
 
   async function handleDeleteExpense(expenseId: string) {
-    if (!window.confirm("이 결제 내역을 삭제할까요?")) {
+    if (!window.confirm(t.deleteExpenseConfirm)) {
       return;
     }
 
@@ -319,7 +469,7 @@ export default function SettlementPage() {
     );
 
     if (!payer || targetParticipants.length === 0) {
-      throw new Error("결제자와 정산 대상자를 다시 확인해주세요.");
+      throw new Error(t.expenseParticipantError);
     }
 
     const now = Timestamp.now();
@@ -355,15 +505,61 @@ export default function SettlementPage() {
     await batch.commit();
   }
 
+  async function handleDeleteParticipant(participant: Participant) {
+    if (participant.id === currentParticipantIdFromStorage) {
+      throw new Error(SELF_DELETE_BLOCKED_MESSAGE);
+    }
+
+    if (expensesLoading) {
+      throw new Error(
+        t.deleteWaitForExpenses,
+      );
+    }
+
+    const isUsedInExpense = expenses.some(
+      (expense) =>
+        expense.payerId === participant.id ||
+        expense.targetParticipantIds.includes(participant.id),
+    );
+
+    if (isUsedInExpense) {
+      throw new Error(
+        t.deleteBlocked,
+      );
+    }
+
+    const now = Timestamp.now();
+    const batch = writeBatch(db);
+
+    batch.delete(
+      doc(
+        db,
+        "settlements",
+        activeSettlement.settlementCode,
+        "participants",
+        participant.id,
+      ),
+    );
+    batch.update(doc(db, "settlements", activeSettlement.settlementCode), {
+      updatedAt: now,
+    });
+
+    await batch.commit();
+
+    if (participant.id === currentParticipantId) {
+      removeCurrentParticipantId(activeSettlement.settlementCode);
+      removeSettlementHistoryItem(activeSettlement.settlementCode);
+      setCurrentParticipantIdState(null);
+    }
+  }
+
   async function handleDeleteSettlement() {
     if (!canDeleteSettlement) {
-      alert("정산에 참여한 사람만 삭제할 수 있어요.");
+      alert(t.deleteOnlyParticipant);
       return;
     }
 
-    const confirmed = window.confirm(
-      "이 정산을 서버에서 완전히 삭제할까요?\n참여자, 결제 내역, 정산 결과가 모두 삭제되고 되돌릴 수 없어요.",
-    );
+    const confirmed = window.confirm(t.deleteSettlementConfirm);
 
     if (!confirmed) {
       return;
@@ -404,7 +600,7 @@ export default function SettlementPage() {
       navigate("/");
     } catch (error) {
       alert(
-        error instanceof Error ? error.message : "정산을 삭제하지 못했어요.",
+        error instanceof Error ? error.message : t.deleteSettlementFailed,
       );
     } finally {
       setDeletingSettlement(false);
@@ -414,17 +610,11 @@ export default function SettlementPage() {
   return (
     <main className="receipt-shell">
       <section className="receipt-card space-y-6">
-        <SettlementHeader
-          settlement={activeSettlement}
-          canDelete={canDeleteSettlement}
-          deleting={deletingSettlement}
-          onDelete={handleDeleteSettlement}
-        />
+        <SettlementHeader settlement={activeSettlement} />
 
         {!hasFirebaseConfig ? (
           <div className="border border-receipt-danger bg-[#f5dfd8] px-3 py-3 text-sm leading-6 text-receipt-danger">
-            Firebase 환경변수가 비어 있어요. `.env`를 설정해야 Firestore 저장이
-            동작합니다.
+            {t.firebaseConfigError}
           </div>
         ) : null}
 
@@ -436,103 +626,136 @@ export default function SettlementPage() {
 
         {shouldShowJoinBox ? (
           <section className="receipt-section space-y-4">
-            <h2 className="text-base font-black">이 정산에 참여하기</h2>
+            <h2 className="text-base font-black">{t.joinTitle}</h2>
             <form className="space-y-3" onSubmit={handleJoinSubmit}>
               <div>
                 <label className="label" htmlFor="direct-join-name">
-                  내 이름
+                  {t.myNameLabel}
                 </label>
                 <input
                   className="input"
                   id="direct-join-name"
-                  maxLength={5}
-                  placeholder="예: 가요미 (최대 5자)"
+                  maxLength={PARTICIPANT_NAME_MAX_LENGTH}
+                  placeholder={t.myNamePlaceholder(
+                    PARTICIPANT_NAME_MAX_LENGTH,
+                  )}
                   value={joinName}
                   onChange={(event) => setJoinName(event.target.value)}
+                  disabled={Boolean(joining)}
                 />
               </div>
+
+              {joinError ? (
+                <p className="text-sm leading-6 text-receipt-danger">
+                  {joinError}
+                </p>
+              ) : null}
+
               <button
                 className="key-button key-button-primary w-full"
                 type="submit"
                 disabled={Boolean(joining)}
               >
-                {joining === "check" ? "확인 중" : "참여하기"}
+                {t.joinButton}
               </button>
             </form>
 
             {duplicateParticipant ? (
-              <div className="space-y-3 border border-receipt-line bg-white/55 p-3">
+              <div className="space-y-3 border-t border-dashed border-receipt-line pt-4">
+                <h3 className="text-sm font-black">
+                  {t.duplicateNameTitle}
+                </h3>
                 <p className="text-sm leading-6 text-receipt-muted">
-                  이미 같은 이름의 참여자가 있어요. 기존 참여자로 다시
-                  입장할까요?
+                  {t.duplicateNameMessage}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
                     className="key-button key-button-primary"
                     type="button"
                     onClick={joinAsExistingParticipant}
+                    disabled={Boolean(joining)}
                   >
-                    기존 참여자로 입장
+                    {t.joinExistingButton}
                   </button>
                   <button
                     className="key-button"
                     type="button"
                     onClick={() => joinAsNewParticipant()}
+                    disabled={Boolean(joining)}
                   >
-                    새 참여자로 입장
+                    {t.joinNewButton}
                   </button>
                 </div>
               </div>
             ) : null}
-
-            {joinError ? (
-              <p className="text-sm leading-6 text-receipt-danger">
-                {joinError}
-              </p>
-            ) : null}
           </section>
-        ) : null}
-
-        {loadingCollections ? (
-          <p className="receipt-section text-sm font-bold text-receipt-muted">
-            실시간 내역을 불러오는 중...
-          </p>
         ) : null}
 
         <ParticipantList
           participants={participants}
-          currentParticipantId={currentParticipantId}
+          currentParticipantId={currentParticipantIdFromStorage}
+          onAddParticipant={handleAddParticipant}
+          onUpdateParticipant={handleUpdateParticipant}
+          onDeleteParticipant={handleDeleteParticipant}
         />
+
+        <KakaoInviteButton
+          settlementName={activeSettlement.settlementName}
+          settlementCode={activeSettlement.settlementCode}
+        />
+
         <ExpenseForm
           participants={participants}
           currentParticipantId={currentParticipantId}
-          disabled={!currentParticipant}
+          isOpen={isExpenseFormOpen}
+          onClose={() => setIsExpenseFormOpen(false)}
           onSubmit={handleAddExpense}
         />
+
         <ExpenseList
           expenses={expenses}
           participants={participants}
+          onAddExpense={() => setIsExpenseFormOpen(true)}
+          addExpenseDisabled={isExpenseFormOpen || loadingCollections}
           onUpdate={handleUpdateExpense}
           onDelete={handleDeleteExpense}
         />
+
         <SettlementResult
           balances={calculation.balances}
           transfers={calculation.transfers}
         />
+
+        {canDeleteSettlement ? (
+          <button
+            className="key-button key-button-danger w-full"
+            type="button"
+            onClick={handleDeleteSettlement}
+            disabled={deletingSettlement}
+          >
+            <Trash2 size={17} aria-hidden="true" />
+            {deletingSettlement
+              ? t.deletingSettlementButton
+              : t.deleteSettlementButton}
+          </button>
+        ) : null}
       </section>
     </main>
   );
 }
 
-async function deleteDocumentsInBatches(documentRefs: DocumentReference[]) {
-  const batchSize = 450;
-
-  for (let index = 0; index < documentRefs.length; index += batchSize) {
+async function deleteDocumentsInBatches(refs: DocumentReference[]) {
+  const MAX_BATCH_SIZE = 500;
+  for (let i = 0; i < refs.length; i += MAX_BATCH_SIZE) {
     const batch = writeBatch(db);
-    const refs = documentRefs.slice(index, index + batchSize);
-
-    refs.forEach((documentRef) => batch.delete(documentRef));
-
+    const chunk = refs.slice(i, i + MAX_BATCH_SIZE);
+    for (const ref of chunk) {
+      batch.delete(ref);
+    }
     await batch.commit();
   }
+}
+
+function isSettlementExpired(settlement: { expiresAt: Timestamp }) {
+  return settlement.expiresAt.toDate().getTime() <= Date.now();
 }

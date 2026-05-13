@@ -1,5 +1,6 @@
 import { CheckSquare, Plus, Square } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { expenseFormTranslations, useCurrentLanguage } from "../i18n";
 import type { Participant } from "../types";
 import { formatCurrency } from "../utils/format";
 import { todayInputValue } from "../utils/format";
@@ -13,17 +14,31 @@ export interface ExpenseFormValues {
   targetParticipantIds: string[];
 }
 
+type ExpenseFormErrorKey =
+  | "payerRequired"
+  | "amountRequired"
+  | "targetsRequired"
+  | "addExpenseFailed";
+
+type ExpenseFormError = { key: ExpenseFormErrorKey } | { message: string };
+
 export default function ExpenseForm({
   participants,
   currentParticipantId,
+  isOpen,
+  onClose,
   onSubmit,
   disabled = false,
 }: {
   participants: Participant[];
   currentParticipantId: string | null;
+  isOpen: boolean;
+  onClose: () => void;
   onSubmit: (values: ExpenseFormValues) => Promise<void>;
   disabled?: boolean;
 }) {
+  const language = useCurrentLanguage();
+  const t = expenseFormTranslations[language];
   const [expenseDate, setExpenseDate] = useState(todayInputValue());
   const [payerId, setPayerId] = useState("");
   const [amount, setAmount] = useState("");
@@ -31,9 +46,8 @@ export default function ExpenseForm({
   const [targetParticipantIds, setTargetParticipantIds] = useState<string[]>(
     [],
   );
-  const [error, setError] = useState("");
+  const [error, setError] = useState<ExpenseFormError | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
   const parsedAmount = useMemo(() => toPositiveInteger(amount), [amount]);
 
   useEffect(() => {
@@ -73,26 +87,24 @@ export default function ExpenseForm({
     });
   }, [currentParticipantId, participants]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function saveExpense(keepExpanded: boolean) {
     if (!payerId) {
-      setError("결제자를 선택해주세요.");
+      setError({ key: "payerRequired" });
       return;
     }
 
     if (!parsedAmount) {
-      setError("금액을 1원 이상 입력해주세요.");
+      setError({ key: "amountRequired" });
       return;
     }
 
     if (targetParticipantIds.length === 0) {
-      setError("정산 대상자를 1명 이상 선택해주세요.");
+      setError({ key: "targetsRequired" });
       return;
     }
 
     try {
-      setError("");
+      setError(null);
       setSubmitting(true);
       await onSubmit({
         payerId,
@@ -101,22 +113,37 @@ export default function ExpenseForm({
         expenseDate,
         targetParticipantIds,
       });
-      setAmount("");
-      setDescription("");
-      setExpenseDate(todayInputValue());
-      setTargetParticipantIds(
-        getDefaultTargetParticipantIds(participants, currentParticipantId),
-      );
-      setIsExpanded(false);
+      resetForm(keepExpanded ? "all" : "default");
+
+      if (!keepExpanded) {
+        onClose();
+      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
-          ? submitError.message
-          : "결제 내역을 추가하지 못했어요.",
+          ? { message: submitError.message }
+          : { key: "addExpenseFailed" },
       );
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveExpense(false);
+  }
+
+  function resetForm(targetMode: "default" | "all") {
+    setExpenseDate(todayInputValue());
+    setPayerId(getDefaultPayerId(participants, currentParticipantId));
+    setAmount("");
+    setDescription("");
+    setTargetParticipantIds(
+      targetMode === "all"
+        ? participants.map((participant) => participant.id)
+        : getDefaultTargetParticipantIds(participants, currentParticipantId),
+    );
   }
 
   function toggleTarget(participantId: string) {
@@ -137,34 +164,17 @@ export default function ExpenseForm({
     setTargetParticipantIds([]);
   }
 
-  if (!isExpanded) {
-    return (
-      <section className="receipt-section space-y-3">
-        <button
-          className="key-button w-full"
-          type="button"
-          onClick={() => setIsExpanded(true)}
-          disabled={disabled}
-        >
-          <Plus size={17} aria-hidden="true" />
-          결제 내역 추가
-        </button>
-        {disabled ? (
-          <p className="text-sm leading-6 text-receipt-danger">
-            이름을 입력하고 참여하면 결제 내역을 추가할 수 있어요.
-          </p>
-        ) : null}
-      </section>
-    );
+  if (!isOpen) {
+    return null;
   }
 
   return (
     <section className="receipt-section space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-black">결제 내역 입력</h2>
+        <h2 className="text-base font-black">{t.title}</h2>
         {parsedAmount ? (
           <span className="amount text-sm font-black">
-            {formatCurrency(parsedAmount)}
+            {formatCurrency(parsedAmount, language)}
           </span>
         ) : null}
       </div>
@@ -172,7 +182,7 @@ export default function ExpenseForm({
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label className="label" htmlFor="expense-date">
-            결제 날짜
+            {t.expenseDateLabel}
           </label>
           <input
             className="input"
@@ -186,7 +196,7 @@ export default function ExpenseForm({
 
         <div>
           <label className="label" htmlFor="payer">
-            결제자
+            {t.payerLabel}
           </label>
           <select
             className="input"
@@ -205,13 +215,13 @@ export default function ExpenseForm({
 
         <div>
           <label className="label" htmlFor="amount">
-            금액
+            {t.amountLabel}
           </label>
           <input
             className="input amount"
             id="amount"
             inputMode="numeric"
-            placeholder="0"
+            placeholder={t.amountPlaceholder}
             value={amount}
             disabled={disabled || submitting}
             onChange={(event) => setAmount(event.target.value)}
@@ -220,12 +230,12 @@ export default function ExpenseForm({
 
         <div>
           <label className="label" htmlFor="description">
-            상세내역
+            {t.descriptionLabel}
           </label>
           <textarea
             className="input textarea"
             id="description"
-            placeholder="예: 저녁 식사, 택시비"
+            placeholder={t.descriptionPlaceholder}
             value={description}
             disabled={disabled || submitting}
             onChange={(event) => setDescription(event.target.value)}
@@ -234,7 +244,7 @@ export default function ExpenseForm({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="label mb-0">정산 대상자</span>
+            <span className="label mb-0">{t.targetParticipantsLabel}</span>
             <div className="flex shrink-0 gap-2">
               <button
                 className="tiny-button"
@@ -243,7 +253,7 @@ export default function ExpenseForm({
                 disabled={disabled || submitting || participants.length === 0}
               >
                 <CheckSquare size={14} aria-hidden="true" />
-                전체 선택
+                {t.selectAllTargetsButton}
               </button>
               <button
                 className="tiny-button"
@@ -254,7 +264,7 @@ export default function ExpenseForm({
                 }
               >
                 <Square size={14} aria-hidden="true" />
-                전체 해제
+                {t.clearAllTargetsButton}
               </button>
             </div>
           </div>
@@ -280,34 +290,59 @@ export default function ExpenseForm({
 
         {disabled ? (
           <p className="text-sm leading-6 text-receipt-danger">
-            이름을 입력하고 참여하면 결제 내역을 추가할 수 있어요.
+            {t.disabledMessage}
           </p>
         ) : null}
         {error ? (
-          <p className="text-sm leading-6 text-receipt-danger">{error}</p>
+          <p className="text-sm leading-6 text-receipt-danger">
+            {getExpenseFormErrorText(error, t)}
+          </p>
         ) : null}
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <button
             className="key-button key-button-primary"
             type="submit"
             disabled={disabled || submitting}
           >
             <Plus size={17} aria-hidden="true" />
-            {submitting ? "추가 중" : "추가하기"}
+            {submitting ? t.submittingButton : t.submitButton}
           </button>
           <button
             className="key-button"
             type="button"
-            onClick={() => setIsExpanded(false)}
+            onClick={() => void saveExpense(true)}
+            disabled={disabled || submitting}
+          >
+            <Plus size={17} aria-hidden="true" />
+            {submitting ? t.submittingButton : t.continueSubmitButton}
+          </button>
+          <button
+            className="key-button"
+            type="button"
+            onClick={onClose}
             disabled={submitting}
           >
-            취소
+            {t.cancelButton}
           </button>
         </div>
       </form>
     </section>
   );
+}
+
+function getDefaultPayerId(
+  participants: Participant[],
+  currentParticipantId: string | null,
+) {
+  if (
+    currentParticipantId &&
+    participants.some((participant) => participant.id === currentParticipantId)
+  ) {
+    return currentParticipantId;
+  }
+
+  return participants[0]?.id ?? "";
 }
 
 function getDefaultTargetParticipantIds(
@@ -322,4 +357,15 @@ function getDefaultTargetParticipantIds(
   }
 
   return participants[0] ? [participants[0].id] : [];
+}
+
+function getExpenseFormErrorText(
+  error: ExpenseFormError,
+  translations: (typeof expenseFormTranslations)["ko"],
+) {
+  if ("message" in error) {
+    return error.message;
+  }
+
+  return translations[error.key];
 }

@@ -95,17 +95,26 @@ function calculateTransfers(balances: SettlementBalance[]): SettlementTransfer[]
   return transfers;
 }
 
-export function buildSettlementShareDescription(transfers: SettlementTransfer[]) {
+export function buildSettlementShareDescription(
+  transfers: SettlementTransfer[],
+  language: "ko" | "en" = "ko",
+) {
   if (transfers.length === 0) {
-    return "정산할 금액이 없습니다.";
+    return language === "en"
+      ? "No transfers needed."
+      : "정산할 금액이 없습니다.";
   }
 
   const visibleTransfers = transfers.slice(0, 10).map((transfer) => {
-    return `${transfer.fromName} -> ${transfer.toName}: ${formatCurrency(transfer.amount)}`;
+    return `${transfer.fromName} -> ${transfer.toName}: ${formatCurrency(transfer.amount, language)}`;
   });
 
   if (transfers.length > 10) {
-    visibleTransfers.push(`외 ${transfers.length - 10}건은 정산에서 확인해주세요.`);
+    visibleTransfers.push(
+      language === "en"
+        ? `Check the split for ${transfers.length - 10} more transfers.`
+        : `외 ${transfers.length - 10}건은 정산에서 확인해주세요.`,
+    );
   }
 
   return visibleTransfers.join("\n");
