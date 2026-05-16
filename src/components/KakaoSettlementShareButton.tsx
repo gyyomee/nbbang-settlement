@@ -5,7 +5,7 @@ import {
   useCurrentLanguage,
 } from "../i18n";
 import type { SettlementTransfer } from "../types";
-import { shareKakao } from "../utils/kakao";
+import { KAKAO_SHARE_RESULT_IMAGE_PATH, shareKakao } from "../utils/kakao";
 import { buildSettlementShareDescription } from "../utils/settlement";
 
 export default function KakaoSettlementShareButton({
@@ -24,6 +24,7 @@ export default function KakaoSettlementShareButton({
         title: t.title,
         description: buildSettlementShareDescription(transfers, language),
         buttonTitle: t.buttonTitle,
+        imagePath: KAKAO_SHARE_RESULT_IMAGE_PATH,
         url: window.location.href,
       });
     } catch (error) {

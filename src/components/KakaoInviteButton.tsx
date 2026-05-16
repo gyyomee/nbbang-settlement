@@ -1,7 +1,7 @@
 import { MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { kakaoInviteTranslations, useCurrentLanguage } from "../i18n";
-import { shareKakao } from "../utils/kakao";
+import { KAKAO_SHARE_INVITE_IMAGE_PATH, shareKakao } from "../utils/kakao";
 
 export default function KakaoInviteButton({
   settlementName,
@@ -21,6 +21,7 @@ export default function KakaoInviteButton({
         title: t.title,
         description: `${t.settlementNameLabel}: ${settlementName}\n${t.settlementCodeLabel}: ${settlementCode}`,
         buttonTitle: t.buttonTitle,
+        imagePath: KAKAO_SHARE_INVITE_IMAGE_PATH,
         url: window.location.href,
       });
     } catch (error) {

@@ -33,8 +33,11 @@ interface KakaoSharePayload {
   }>;
 }
 
-const KAKAO_SDK_URL = "https://developers.kakao.com/sdk/js/kakao.js";
+const KAKAO_SDK_URL =
+  "https://t1.kakaocdn.net/kakao_js_sdk/2.7.6/kakao.min.js";
 const KAKAO_SDK_TIMEOUT_MS = 7_000;
+export const KAKAO_SHARE_INVITE_IMAGE_PATH = "kakao-share-invite.png";
+export const KAKAO_SHARE_RESULT_IMAGE_PATH = "kakao-share-result.png";
 let kakaoSdkPromise: Promise<void> | null = null;
 
 export function initializeKakaoSdk() {
@@ -73,11 +76,13 @@ export async function shareKakao({
   title,
   description,
   buttonTitle,
+  imagePath = KAKAO_SHARE_INVITE_IMAGE_PATH,
   url,
 }: {
   title: string;
   description: string;
   buttonTitle: string;
+  imagePath?: string;
   url: string;
 }) {
   console.log("=== Kakao Share Debug Log ===");
@@ -106,7 +111,7 @@ export async function shareKakao({
     content: {
       title,
       description,
-      imageUrl: getAssetUrl("kakao-share.png"),
+      imageUrl: getAssetUrl(imagePath),
       link: {
         mobileWebUrl: url,
         webUrl: url,
@@ -152,6 +157,7 @@ function loadKakaoScript() {
   const script = document.createElement("script");
   script.src = KAKAO_SDK_URL;
   script.async = true;
+  script.crossOrigin = "anonymous";
   document.head.appendChild(script);
 
   return waitForKakaoScript(script);
