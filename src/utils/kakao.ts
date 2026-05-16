@@ -34,6 +34,7 @@ interface KakaoSharePayload {
 }
 
 const KAKAO_SDK_URL = "https://developers.kakao.com/sdk/js/kakao.js";
+const KAKAO_SDK_TIMEOUT_MS = 7_000;
 let kakaoSdkPromise: Promise<void> | null = null;
 
 export function initializeKakaoSdk() {
@@ -48,15 +49,21 @@ export function initializeKakaoSdk() {
   }
 
   if (!kakaoSdkPromise) {
-    kakaoSdkPromise = loadKakaoScript().then(() => {
-      if (!window.Kakao) {
-        throw new Error("Kakao SDK를 불러오지 못했어요.");
-      }
+    kakaoSdkPromise = loadKakaoScript()
+      .then(() => {
+        if (!window.Kakao) {
+          throw new Error("Kakao SDK를 불러오지 못했어요.");
+        }
 
-      if (!window.Kakao.isInitialized()) {
-        window.Kakao.init(kakaoKey);
-      }
-    });
+        if (!window.Kakao.isInitialized()) {
+          window.Kakao.init(kakaoKey);
+        }
+      })
+      .catch((error) => {
+        kakaoSdkPromise = null;
+        console.error("Kakao SDK initialization failed:", error);
+        throw error;
+      });
   }
 
   return kakaoSdkPromise;
@@ -130,18 +137,60 @@ export async function shareKakao({
 }
 
 function loadKakaoScript() {
-  if (document.querySelector(`script[src="${KAKAO_SDK_URL}"]`)) {
+  if (window.Kakao) {
+    return Promise.resolve();
+  }
+
+  const existingScript = document.querySelector<HTMLScriptElement>(
+    `script[src="${KAKAO_SDK_URL}"]`,
+  );
+
+  if (existingScript) {
+    return waitForKakaoScript(existingScript);
+  }
+
+  const script = document.createElement("script");
+  script.src = KAKAO_SDK_URL;
+  script.async = true;
+  document.head.appendChild(script);
+
+  return waitForKakaoScript(script);
+}
+
+function waitForKakaoScript(script: HTMLScriptElement) {
+  if (window.Kakao) {
     return Promise.resolve();
   }
 
   return new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = KAKAO_SDK_URL;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () =>
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
       reject(new Error("Kakao SDK 스크립트 로드에 실패했어요."));
-    document.head.appendChild(script);
+    }, KAKAO_SDK_TIMEOUT_MS);
+
+    function cleanup() {
+      window.clearTimeout(timeoutId);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+    }
+
+    function handleLoad() {
+      cleanup();
+      resolve();
+    }
+
+    function handleError() {
+      cleanup();
+      reject(new Error("Kakao SDK 스크립트 로드에 실패했어요."));
+    }
+
+    script.addEventListener("load", handleLoad, { once: true });
+    script.addEventListener("error", handleError, { once: true });
+
+    if (window.Kakao) {
+      cleanup();
+      resolve();
+    }
   });
 }
 
