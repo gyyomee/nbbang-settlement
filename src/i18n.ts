@@ -70,7 +70,8 @@ export const homeTranslations = {
     myNameRequired: "내 이름을 입력해주세요.",
     myNameMaxLength: (maxLength: number) =>
       `내 이름은 ${maxLength}자 이하로 입력해주세요.`,
-    invalidSettlementCode: "정산 코드는 8자리 영문 대문자와 숫자로 입력해주세요.",
+    invalidSettlementCode:
+      "정산 코드는 8자리 영문 대문자와 숫자로 입력해주세요.",
     settlementNotFound: "존재하지 않는 정산 코드예요.",
     checkSettlementFailed: "정산을 확인하지 못했어요.",
     joinNeedsSettlementCheck: "정산 코드를 먼저 확인해주세요.",
@@ -135,7 +136,10 @@ export const homeTranslations = {
     firestorePermissionError:
       "Firestore permission was denied. Check that firestore.rules has been deployed in Firebase Console or with Firebase CLI.",
   },
-} satisfies Record<Language, Record<string, string | ((value: never) => string)>>;
+} satisfies Record<
+  Language,
+  Record<string, string | ((value: never) => string)>
+>;
 
 export const participantListTranslations = {
   ko: {
@@ -154,8 +158,7 @@ export const participantListTranslations = {
     meBadge: "(나)",
     deleteParticipantLabel: (participantName: string) =>
       `${participantName} 삭제`,
-    deleteConfirm:
-      "정말 이 참여자를 삭제할까요? 삭제 후 복구할 수 없습니다.",
+    deleteConfirm: "정말 이 참여자를 삭제할까요? 삭제 후 복구할 수 없습니다.",
     noParticipants: "아직 참여자가 없어요.",
     addParticipantFailed: "참여자를 추가하지 못했어요.",
     deleteParticipantFailed: "참여자를 삭제하지 못했어요.",
@@ -282,7 +285,8 @@ export const expenseListTranslations = {
   en: {
     title: "Expenses",
     addExpenseButton: "Add Expense",
-    expenseCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
+    expenseCount: (count: number) =>
+      `${count} ${count === 1 ? "item" : "items"}`,
     emptyMessage: "No expenses have been added yet.",
     expenseDateLabel: "Date",
     payerLabel: "Payer",
@@ -340,6 +344,12 @@ export const settlementHeaderTranslations = {
     settlementCodeLabel: "정산 코드",
     copyButton: "복사",
     copiedButton: "복사됨",
+    manageSettlementButton: "수정",
+    finishManagementButton: "완료",
+    saveTitleButton: "저장",
+    titleRequired: "정산 이름을 입력해주세요.",
+    titleMaxLength: "정산 이름은 30자 이하로 입력해주세요.",
+    titleSaveFailed: "정산 이름을 저장하지 못했어요.",
   },
   en: {
     homeLabel: "Home",
@@ -347,6 +357,12 @@ export const settlementHeaderTranslations = {
     settlementCodeLabel: "Split Code",
     copyButton: "Copy",
     copiedButton: "Copied",
+    manageSettlementButton: "Edit Split",
+    finishManagementButton: "Done",
+    saveTitleButton: "Save",
+    titleRequired: "Enter a split name.",
+    titleMaxLength: "Split name must be 30 characters or fewer.",
+    titleSaveFailed: "Could not save the split name.",
   },
 } satisfies Record<Language, Record<string, string>>;
 
@@ -360,8 +376,7 @@ export const settlementPageTranslations = {
     myNamePlaceholder: (maxLength: number) => `이름 (최대 ${maxLength}자)`,
     joinButton: "참여하기",
     duplicateNameTitle: "동일한 이름이 있어요",
-    duplicateNameMessage:
-      "이미 참여한 사람인가요, 아니면 새로운 참여자인가요?",
+    duplicateNameMessage: "이미 참여한 사람인가요, 아니면 새로운 참여자인가요?",
     joinExistingButton: "기존 참여자로 입장",
     joinNewButton: "새 참여자로 추가",
     joinNameRequired: "참여할 이름을 입력해주세요.",
@@ -389,8 +404,7 @@ export const settlementPageTranslations = {
       "Firebase environment variables are missing. Set `.env` to save to Firestore.",
     joinTitle: "Join This Split",
     myNameLabel: "My Name",
-    myNamePlaceholder: (maxLength: number) =>
-      `Name (max ${maxLength} chars)`,
+    myNamePlaceholder: (maxLength: number) => `Name (max ${maxLength} chars)`,
     joinButton: "Join",
     duplicateNameTitle: "Same Name Found",
     duplicateNameMessage:

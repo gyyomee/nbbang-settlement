@@ -114,6 +114,25 @@ export function upsertSettlementHistory(item: SettlementHistoryItem) {
   saveSettlementHistory([{ ...item, joinedAt, lastVisitedAt: item.lastVisitedAt || now }, ...currentItems]);
 }
 
+export function updateSettlementHistoryName(
+  settlementCode: string,
+  settlementName: string,
+) {
+  const history = getSettlementHistory();
+
+  if (!history.some((item) => item.settlementCode === settlementCode)) {
+    return;
+  }
+
+  saveSettlementHistory(
+    history.map((item) =>
+      item.settlementCode === settlementCode
+        ? { ...item, settlementName }
+        : item,
+    ),
+  );
+}
+
 export function removeSettlementHistoryItem(settlementCode: string) {
   saveSettlementHistory(getSettlementHistory().filter((item) => item.settlementCode !== settlementCode));
 }

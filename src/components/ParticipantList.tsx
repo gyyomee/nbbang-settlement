@@ -1,5 +1,5 @@
-import { Check, Pencil, Plus, Trash2, UserRound, X } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { Plus, Trash2, UserRound } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
 import { participantListTranslations, useCurrentLanguage } from "../i18n";
 import type { Participant } from "../types";
 import {
@@ -29,26 +29,24 @@ type ParticipantErrorKey =
 
 const PARTICIPANT_EDIT_LABELS = {
   ko: {
-    editButton: "참여자 수정",
-    doneButton: "완료",
     currentUserLabel: "내 이름",
     deleteUnavailableLabel: "삭제 불가",
   },
   en: {
-    editButton: "Edit Participants",
-    doneButton: "Done",
     currentUserLabel: "My Name",
     deleteUnavailableLabel: "Cannot Delete",
   },
 };
 
 export default function ParticipantList({
+  isManaging = false,
   participants,
   currentParticipantId,
   onAddParticipant,
   onUpdateParticipant,
   onDeleteParticipant,
 }: {
+  isManaging?: boolean;
   participants: Participant[];
   currentParticipantId: string | null;
   onAddParticipant?: (participantName: string) => Promise<void>;
@@ -61,7 +59,7 @@ export default function ParticipantList({
   const canEditParticipants = Boolean(
     onAddParticipant || onDeleteParticipant || onUpdateParticipant,
   );
-  const [isEditing, setIsEditing] = useState(false);
+  const isEditing = isManaging && canEditParticipants;
   const [isAdding, setIsAdding] = useState(false);
   const [participantName, setParticipantName] = useState("");
   const [editingParticipantId, setEditingParticipantId] = useState<
@@ -81,6 +79,21 @@ export default function ParticipantList({
     if (b.id === currentParticipantId) return 1;
     return 0;
   });
+  const shouldShowParticipantGrid =
+    participants.length > 0 || (isEditing && Boolean(onAddParticipant));
+
+  useEffect(() => {
+    if (isEditing) {
+      return;
+    }
+
+    setIsAdding(false);
+    setParticipantName("");
+    setEditingParticipantId(null);
+    setEditingName("");
+    setFormError(null);
+    setDeleteError(null);
+  }, [isEditing]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,24 +126,6 @@ export default function ParticipantList({
     } finally {
       setSaving(false);
     }
-  }
-
-  function handleCancel() {
-    setParticipantName("");
-    setFormError(null);
-    setIsAdding(false);
-  }
-
-  function startEditing() {
-    setIsEditing(true);
-    setDeleteError(null);
-  }
-
-  function finishEditing() {
-    setIsEditing(false);
-    setDeleteError(null);
-    setEditingParticipantId(null);
-    handleCancel();
   }
 
   async function handleUpdateSubmit(participant: Participant) {
@@ -183,27 +178,6 @@ export default function ParticipantList({
           <span className="text-sm font-bold text-receipt-muted">
             {t.participantCount(participants.length)}
           </span>
-          {canEditParticipants && !isEditing ? (
-            <button
-              className="tiny-button"
-              type="button"
-              onClick={startEditing}
-            >
-              <Pencil size={14} aria-hidden="true" />
-              {editLabels.editButton}
-            </button>
-          ) : null}
-          {isEditing ? (
-            <button
-              className="tiny-button"
-              type="button"
-              onClick={finishEditing}
-              disabled={saving || Boolean(deletingParticipantId)}
-            >
-              <Check size={14} aria-hidden="true" />
-              {editLabels.doneButton}
-            </button>
-          ) : null}
         </div>
       </div>
 
@@ -219,7 +193,7 @@ export default function ParticipantList({
         </p>
       ) : null}
 
-      {participants.length === 0 ? (
+      {!shouldShowParticipantGrid ? (
         <p className="text-sm text-receipt-muted">{t.noParticipants}</p>
       ) : (
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">

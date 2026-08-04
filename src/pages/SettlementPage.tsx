@@ -7,6 +7,7 @@ import {
   getDocs,
   limit,
   query,
+  serverTimestamp,
   updateDoc,
   where,
   writeBatch,
@@ -38,6 +39,7 @@ import {
   removeCurrentParticipantId,
   removeSettlementHistoryItem,
   setCurrentParticipantId,
+  updateSettlementHistoryName,
   upsertSettlementHistory,
 } from "../utils/storage";
 import {
@@ -87,6 +89,10 @@ export default function SettlementPage() {
   );
   const [deletingSettlement, setDeletingSettlement] = useState(false);
   const [isExpenseFormOpen, setIsExpenseFormOpen] = useState(false);
+  const [isManagingSettlement, setIsManagingSettlement] = useState(false);
+  const [optimisticSettlementName, setOptimisticSettlementName] = useState<
+    string | null
+  >(null);
   const currentParticipant =
     participants.find(
       (participant) => participant.id === currentParticipantId,
@@ -101,7 +107,24 @@ export default function SettlementPage() {
     setCurrentParticipantIdState(
       isCodeValid ? getCurrentParticipantId(settlementCode) : null,
     );
+    setIsManagingSettlement(false);
+    setOptimisticSettlementName(null);
   }, [isCodeValid, settlementCode]);
+
+  useEffect(() => {
+    if (!settlement) {
+      return;
+    }
+
+    updateSettlementHistoryName(
+      settlement.settlementCode,
+      settlement.settlementName,
+    );
+
+    if (settlement.settlementName === optimisticSettlementName) {
+      setOptimisticSettlementName(null);
+    }
+  }, [optimisticSettlementName, settlement]);
 
   useEffect(() => {
     if (
@@ -137,7 +160,10 @@ export default function SettlementPage() {
     return <InvalidSettlementPage />;
   }
 
-  const activeSettlement = settlement;
+  const activeSettlement = {
+    ...settlement,
+    settlementName: optimisticSettlementName ?? settlement.settlementName,
+  };
 
   const loadingCollections = participantsLoading || expensesLoading;
   const collectionError = participantsError || expensesError;
@@ -196,6 +222,18 @@ export default function SettlementPage() {
     } finally {
       setJoining(null);
     }
+  }
+
+  async function handleUpdateSettlementName(nextSettlementName: string) {
+    await updateDoc(doc(db, "settlements", activeSettlement.settlementCode), {
+      settlementName: nextSettlementName,
+      updatedAt: serverTimestamp(),
+    });
+    setOptimisticSettlementName(nextSettlementName);
+    updateSettlementHistoryName(
+      activeSettlement.settlementCode,
+      nextSettlementName,
+    );
   }
 
   async function joinAsExistingParticipant() {
@@ -599,7 +637,13 @@ export default function SettlementPage() {
   return (
     <main className="receipt-shell">
       <section className="receipt-card space-y-6">
-        <SettlementHeader settlement={activeSettlement} />
+        <SettlementHeader
+          settlement={activeSettlement}
+          isManagingSettlement={isManagingSettlement}
+          onStartManagement={() => setIsManagingSettlement(true)}
+          onFinishManagement={() => setIsManagingSettlement(false)}
+          onUpdateSettlementName={handleUpdateSettlementName}
+        />
 
         {!hasFirebaseConfig ? (
           <div className="border border-receipt-danger bg-[#f5dfd8] px-3 py-3 text-sm leading-6 text-receipt-danger">
@@ -681,6 +725,7 @@ export default function SettlementPage() {
         ) : null}
 
         <ParticipantList
+          isManaging={isManagingSettlement}
           participants={participants}
           currentParticipantId={currentParticipantIdFromStorage}
           onAddParticipant={handleAddParticipant}
