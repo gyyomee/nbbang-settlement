@@ -106,8 +106,7 @@ export default function SettlementPage() {
   useEffect(() => {
     if (
       !settlement ||
-      !currentParticipant ||
-      isSettlementExpired(settlement)
+      !currentParticipant
     ) {
       return;
     }
@@ -119,7 +118,6 @@ export default function SettlementPage() {
       participantName: currentParticipant.name,
       joinedAt: new Date().toISOString(),
       lastVisitedAt: new Date().toISOString(),
-      expiresAt: settlement.expiresAt.toDate().toISOString(),
     });
   }, [currentParticipant, settlement]);
 
@@ -140,15 +138,6 @@ export default function SettlementPage() {
   }
 
   const activeSettlement = settlement;
-
-  if (isSettlementExpired(activeSettlement)) {
-    return (
-      <ErrorView
-        title={t.expiredTitle}
-        message={t.expiredMessage}
-      />
-    );
-  }
 
   const loadingCollections = participantsLoading || expensesLoading;
   const collectionError = participantsError || expensesError;
@@ -754,8 +743,4 @@ async function deleteDocumentsInBatches(refs: DocumentReference[]) {
     }
     await batch.commit();
   }
-}
-
-function isSettlementExpired(settlement: { expiresAt: Timestamp }) {
-  return settlement.expiresAt.toDate().getTime() <= Date.now();
 }

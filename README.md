@@ -44,35 +44,17 @@ settlements/{settlementCode}/expenses/{expenseId}
 
 생성 시 timestamp 필드는 모두 Firestore `Timestamp`로 저장합니다.
 
-- `Settlement`: `createdAt`, `updatedAt`, `expiresAt`
+- `Settlement`: `createdAt`, `updatedAt`
 - `Participant`: `joinedAt`, `createdAt`, `updatedAt`
 - `Expense`: `createdAt`, `updatedAt`
 
-Security Rules 예시는 [firestore.rules](/Users/gayoung/Documents/Codex/2026-05-11/react-vite-typescript-tailwind-css-n/firestore.rules)에 있습니다. 로그인 없는 MVP라 공개 쓰기를 전제로 하므로, 실제 배포 시 Firebase 프로젝트를 이 앱 전용으로 분리하고 만료 정책/사용량 제한을 함께 설정하는 것을 권장합니다.
+Security Rules 예시는 [firestore.rules](/Users/gayoung/Documents/Codex/2026-05-11/react-vite-typescript-tailwind-css-n/firestore.rules)에 있습니다. 로그인 없는 MVP라 공개 쓰기를 전제로 하므로, 실제 배포 시 Firebase 프로젝트를 이 앱 전용으로 분리하고 사용량 제한을 함께 설정하는 것을 권장합니다.
 
 Rules 배포:
 
 ```bash
 npx firebase-tools deploy --only firestore:rules --project receipt-splitter-69494
 ```
-
-## Firestore TTL 90일 자동 삭제 설정
-
-정산 문서는 생성 시 `expiresAt` 필드에 생성일 기준 90일 뒤 시간이 저장됩니다. Firestore TTL은 Firebase 콘솔에서 별도로 설정합니다.
-
-1. Firebase 콘솔에서 해당 프로젝트로 이동합니다.
-2. Firestore Database 메뉴를 엽니다.
-3. TTL 정책을 추가합니다.
-4. Collection group은 `settlements`로 설정합니다.
-5. TTL field는 `expiresAt`으로 설정합니다.
-
-TTL 삭제는 만료 시각에 즉시 실행되지 않습니다. 보통 만료 후 일정 시간이 지난 뒤 Firestore가 백그라운드에서 처리합니다.
-
-주의할 점:
-
-- TTL로 `settlements/{settlementCode}` 문서가 삭제되어도 하위 subcollection인 `participants`, `expenses` 문서는 자동 삭제되지 않을 수 있습니다.
-- MVP에서는 앱에서 `expiresAt`이 지난 정산을 "만료된 정산"으로 처리해 입력/수정/삭제를 막습니다.
-- 완전한 하위 데이터 삭제는 추후 Cloud Functions에서 settlement 삭제 시 `participants`와 `expenses`를 함께 정리하는 방식으로 개선할 예정입니다.
 
 ## Kakao 공유 설정
 

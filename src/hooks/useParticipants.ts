@@ -1,6 +1,10 @@
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db, hasFirebaseConfig } from "../firebase";
+import {
+  db,
+  getFirestoreRealtimeErrorMessage,
+  hasFirebaseConfig,
+} from "../firebase";
 import type { Participant } from "../types";
 
 export function useParticipants(settlementCode?: string) {
@@ -37,7 +41,7 @@ export function useParticipants(settlementCode?: string) {
         setLoading(false);
       },
       (snapshotError) => {
-        setError(snapshotError.message);
+        setError(getFirestoreRealtimeErrorMessage(snapshotError));
         setLoading(false);
       },
     );

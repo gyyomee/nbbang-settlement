@@ -11,14 +11,12 @@ service cloud.firestore {
     }
 
     function isOpenSettlement(code) {
-      return getAfter(settlementPath(code)).data.status == 'open'
-        && getAfter(settlementPath(code)).data.expiresAt > request.time;
+      return getAfter(settlementPath(code)).data.status == 'open';
     }
 
     function isExistingOpenSettlement(code) {
       return exists(settlementPath(code))
-        && get(settlementPath(code)).data.status == 'open'
-        && get(settlementPath(code)).data.expiresAt > request.time;
+        && get(settlementPath(code)).data.status == 'open';
     }
 
     function isValidExpenseData(data, expenseId) {
@@ -58,7 +56,6 @@ service cloud.firestore {
           'settlementName',
           'createdAt',
           'updatedAt',
-          'expiresAt',
           'status'
         ])
         && request.resource.data.settlementCode == settlementCode
@@ -66,22 +63,19 @@ service cloud.firestore {
         && request.resource.data.settlementName.size() > 0
         && request.resource.data.createdAt is timestamp
         && request.resource.data.updatedAt is timestamp
-        && request.resource.data.expiresAt is timestamp
         && request.resource.data.status == 'open';
 
       allow update: if validSettlementCode(settlementCode)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'settlementName',
           'updatedAt',
-          'expiresAt',
           'status'
         ])
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.status in ['open', 'settled', 'closed'];
 
       allow delete: if validSettlementCode(settlementCode)
-        && resource.data.status == 'open'
-        && resource.data.expiresAt > request.time;
+        && resource.data.status == 'open';
 
       match /participants/{participantId} {
         allow read: if validSettlementCode(settlementCode);

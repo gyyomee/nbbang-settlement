@@ -1,3 +1,5 @@
+import { parseAmountInputDigits } from "./amountInput";
+
 export const PARTICIPANT_NAME_MAX_LENGTH = 5;
 
 export function normalizeName(value: string) {
@@ -27,7 +29,12 @@ export function getNameKey(value: string) {
 }
 
 export function toPositiveInteger(value: string) {
-  const normalized = value.replace(/[^\d]/g, "");
+  const normalized = parseAmountInputDigits(value);
+
+  if (!normalized) {
+    return null;
+  }
+
   const amount = Number(normalized);
 
   return Number.isSafeInteger(amount) && amount > 0 ? amount : null;

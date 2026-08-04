@@ -14,8 +14,9 @@ import {
   useCurrentLanguage,
 } from "../i18n";
 import type { Expense, Participant } from "../types";
-import { formatCurrency, formatDateLabel } from "../utils/format";
+import { formatDateLabel, formatKRW, formatNumber } from "../utils/format";
 import { toPositiveInteger } from "../utils/validation";
+import AmountInput from "./AmountInput";
 
 export interface ExpenseEditValues {
   payerId: string;
@@ -76,7 +77,7 @@ export default function ExpenseList({
     setEditingExpenseId(expense.id);
     setEditExpenseDate(expense.expenseDate);
     setEditPayerId(expense.payerId);
-    setEditAmount(String(expense.amount));
+    setEditAmount(formatNumber(expense.amount));
     setEditDescription(expense.description);
     setEditTargetParticipantIds(expense.targetParticipantIds);
     setEditError(null);
@@ -246,15 +247,12 @@ export default function ExpenseList({
                             >
                               {t.amountLabel}
                             </label>
-                            <input
+                            <AmountInput
                               className="input amount"
                               id={`edit-amount-${expense.id}`}
-                              inputMode="numeric"
                               value={editAmount}
                               disabled={saving}
-                              onChange={(event) =>
-                                setEditAmount(event.target.value)
-                              }
+                              onValueChange={setEditAmount}
                             />
                           </div>
 
@@ -377,7 +375,7 @@ export default function ExpenseList({
                               </p>
                             </div>
                             <p className="amount text-sm font-black">
-                              {formatCurrency(expense.amount, language)}
+                              {formatKRW(expense.amount)}
                             </p>
                           </div>
                           <div className="mt-3 flex items-end justify-between gap-3">

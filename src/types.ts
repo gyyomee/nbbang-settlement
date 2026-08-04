@@ -7,7 +7,6 @@ export interface Settlement {
   settlementName: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  expiresAt: Timestamp;
   status: SettlementStatus;
 }
 
@@ -40,7 +39,6 @@ export interface SettlementHistoryItem {
   participantName: string;
   joinedAt: string;
   lastVisitedAt: string;
-  expiresAt?: string;
 }
 
 export interface SettlementBalance {

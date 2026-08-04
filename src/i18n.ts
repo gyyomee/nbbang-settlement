@@ -353,9 +353,6 @@ export const settlementHeaderTranslations = {
 export const settlementPageTranslations = {
   ko: {
     loadingReceipt: "정산 영수증을 불러오는 중...",
-    expiredTitle: "만료된 정산입니다.",
-    expiredMessage:
-      "이 정산은 90일 보관 기간이 지나 입력, 수정, 삭제를 할 수 없습니다.",
     firebaseConfigError:
       "Firebase 환경변수가 비어 있어요. `.env`를 설정해야 Firestore 저장이 동작합니다.",
     joinTitle: "이 정산에 참여하기",
@@ -388,9 +385,6 @@ export const settlementPageTranslations = {
   },
   en: {
     loadingReceipt: "Loading settlement receipt...",
-    expiredTitle: "This split has expired.",
-    expiredMessage:
-      "This split is past the 90-day retention period, so it cannot be edited or deleted.",
     firebaseConfigError:
       "Firebase environment variables are missing. Set `.env` to save to Firestore.",
     joinTitle: "Join This Split",

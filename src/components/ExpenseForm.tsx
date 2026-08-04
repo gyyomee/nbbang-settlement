@@ -2,9 +2,9 @@ import { CheckSquare, Plus, Square } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { expenseFormTranslations, useCurrentLanguage } from "../i18n";
 import type { Participant } from "../types";
-import { formatCurrency } from "../utils/format";
-import { todayInputValue } from "../utils/format";
+import { formatKRW, todayInputValue } from "../utils/format";
 import { toPositiveInteger } from "../utils/validation";
+import AmountInput from "./AmountInput";
 
 export interface ExpenseFormValues {
   payerId: string;
@@ -174,7 +174,7 @@ export default function ExpenseForm({
         <h2 className="text-base font-black">{t.title}</h2>
         {parsedAmount ? (
           <span className="amount text-sm font-black">
-            {formatCurrency(parsedAmount, language)}
+            {formatKRW(parsedAmount)}
           </span>
         ) : null}
       </div>
@@ -217,14 +217,13 @@ export default function ExpenseForm({
           <label className="label" htmlFor="amount">
             {t.amountLabel}
           </label>
-          <input
+          <AmountInput
             className="input amount"
             id="amount"
-            inputMode="numeric"
             placeholder={t.amountPlaceholder}
             value={amount}
             disabled={disabled || submitting}
-            onChange={(event) => setAmount(event.target.value)}
+            onValueChange={setAmount}
           />
         </div>
 

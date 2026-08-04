@@ -1,6 +1,10 @@
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db, hasFirebaseConfig } from "../firebase";
+import {
+  db,
+  getFirestoreRealtimeErrorMessage,
+  hasFirebaseConfig,
+} from "../firebase";
 import type { Settlement } from "../types";
 
 export function useSettlement(settlementCode?: string) {
@@ -32,7 +36,7 @@ export function useSettlement(settlementCode?: string) {
         setLoading(false);
       },
       (snapshotError) => {
-        setError(snapshotError.message);
+        setError(getFirestoreRealtimeErrorMessage(snapshotError));
         setLoading(false);
       },
     );

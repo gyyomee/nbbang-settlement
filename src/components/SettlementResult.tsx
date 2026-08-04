@@ -1,6 +1,6 @@
 import { settlementResultTranslations, useCurrentLanguage } from "../i18n";
 import type { SettlementBalance, SettlementTransfer } from "../types";
-import { formatCurrency } from "../utils/format";
+import { formatKRW } from "../utils/format";
 import KakaoSettlementShareButton from "./KakaoSettlementShareButton";
 
 export default function SettlementResult({
@@ -45,19 +45,18 @@ export default function SettlementResult({
                         : "text-receipt-muted"
                   }`}
                 >
-                  {balance.balance > 0 ? "+" : ""}
-                  {formatCurrency(balance.balance, language)}
+                  {formatBalanceAmount(balance.balance)}
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs text-receipt-muted">
               <span>
                 {t.paidAmountLabel}{" "}
-                {formatCurrency(balance.paidAmount, language)}
+                {formatKRW(balance.paidAmount)}
               </span>
               <span className="amount">
                 {t.owedAmountLabel}{" "}
-                {formatCurrency(balance.owedAmount, language)}
+                {formatKRW(balance.owedAmount)}
               </span>
             </div>
           </div>
@@ -82,7 +81,7 @@ export default function SettlementResult({
                   <strong>{transfer.toName}</strong>
                 </span>
                 <span className="amount font-black">
-                  {formatCurrency(transfer.amount, language)}
+                  {formatKRW(transfer.amount)}
                 </span>
               </li>
             ))}
@@ -108,4 +107,16 @@ function getBalanceAmountLabel(
   }
 
   return translations.settledAmountLabel;
+}
+
+function formatBalanceAmount(balance: number) {
+  if (balance > 0) {
+    return `+${formatKRW(balance)}`;
+  }
+
+  if (balance < 0) {
+    return formatKRW(Math.abs(balance));
+  }
+
+  return formatKRW(0);
 }

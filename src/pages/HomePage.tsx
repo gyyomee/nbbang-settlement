@@ -48,7 +48,6 @@ interface JoinPreview {
 
 type HomeMode = "create" | "join" | null;
 type HomeTranslation = (typeof homeTranslations)["ko"];
-const SETTLEMENT_EXPIRATION_DAYS = 90;
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -71,9 +70,6 @@ export default function HomePage() {
     "create" | "check" | "join" | "existing" | null
   >(null);
   const [mode, setMode] = useState<HomeMode>(null);
-  const visibleHistory = history.filter(
-    (item) => !isExpiredHistoryItem(item),
-  );
 
   async function handleCreateSettlement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -175,11 +171,6 @@ export default function HomePage() {
 
       const settlement = settlementDoc.data() as Settlement;
 
-      if (isSettlementExpired(settlement)) {
-        setError("만료된 정산입니다.");
-        return;
-      }
-
       setJoinPreview({
         settlement,
         participants: participantsSnapshot.docs.map(
@@ -269,7 +260,6 @@ export default function HomePage() {
         settlementName: pendingJoin.settlement.settlementName,
         participantId: pendingJoin.participant.id,
         participantName: pendingJoin.participant.name,
-        expiresAt: getSettlementExpiresAtIso(pendingJoin.settlement),
       });
     } finally {
       setLoadingAction(null);
@@ -310,7 +300,6 @@ export default function HomePage() {
       settlementName: settlement.settlementName,
       participantId,
       participantName,
-      expiresAt: getSettlementExpiresAtIso(settlement),
     });
   }
 
@@ -319,13 +308,11 @@ export default function HomePage() {
     settlementName,
     participantId,
     participantName,
-    expiresAt,
   }: {
     settlementCode: string;
     settlementName: string;
     participantId: string;
     participantName: string;
-    expiresAt?: string;
   }) {
     const now = new Date().toISOString();
 
@@ -337,7 +324,6 @@ export default function HomePage() {
       participantName,
       joinedAt: now,
       lastVisitedAt: now,
-      expiresAt,
     });
     setHistory(getSettlementHistory());
     navigate(`/settlements/${settlementCode}`, { flushSync: true });
@@ -636,17 +622,17 @@ export default function HomePage() {
               {t.recentSettlementsTitle}
             </h2>
             <span className="text-sm font-bold text-receipt-muted">
-              {visibleHistory.length}/10
+              {history.length}/10
             </span>
           </div>
 
-          {visibleHistory.length === 0 ? (
+          {history.length === 0 ? (
             <p className="text-sm leading-6 text-receipt-muted">
               {t.noRecentSettlements}
             </p>
           ) : (
             <ul className="space-y-2">
-              {visibleHistory.map((item) => (
+              {history.map((item) => (
                 <li
                   className="grid grid-cols-[1fr_auto] gap-2 border border-receipt-line bg-white/55 p-3"
                   key={item.settlementCode}
@@ -690,12 +676,6 @@ function createSettlementWithParticipant(
   const settlementCode = generateSettlementCode();
   const participantId = createClientId();
   const now = Timestamp.now();
-  const expiresAt = Timestamp.fromDate(
-    new Date(
-      now.toDate().getTime() +
-        SETTLEMENT_EXPIRATION_DAYS * 24 * 60 * 60 * 1000,
-    ),
-  );
   const settlementRef = doc(db, "settlements", settlementCode);
   const participantRef = doc(
     db,
@@ -711,7 +691,6 @@ function createSettlementWithParticipant(
     settlementName,
     createdAt: now,
     updatedAt: now,
-    expiresAt,
     status: "open",
   } satisfies Settlement);
   batch.set(participantRef, {
@@ -728,23 +707,8 @@ function createSettlementWithParticipant(
     settlementName,
     participantId,
     participantName,
-    expiresAt: expiresAt.toDate().toISOString(),
     save: () => batch.commit(),
   };
-}
-
-function isSettlementExpired(settlement: Settlement) {
-  return settlement.expiresAt.toDate().getTime() <= Date.now();
-}
-
-function getSettlementExpiresAtIso(settlement: Settlement) {
-  return settlement.expiresAt.toDate().toISOString();
-}
-
-function isExpiredHistoryItem(item: SettlementHistoryItem) {
-  return item.expiresAt
-    ? new Date(item.expiresAt).getTime() <= Date.now()
-    : false;
 }
 
 function getFirestoreErrorMessage(

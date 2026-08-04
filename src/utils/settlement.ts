@@ -1,5 +1,5 @@
 import type { Expense, Participant, SettlementBalance, SettlementTransfer } from "../types";
-import { formatCurrency } from "./format";
+import { formatKRW } from "./format";
 
 export function calculateSettlement(participants: Participant[], expenses: Expense[]) {
   const balancesByParticipant = new Map<string, SettlementBalance>();
@@ -106,7 +106,7 @@ export function buildSettlementShareDescription(
   }
 
   const visibleTransfers = transfers.slice(0, 10).map((transfer) => {
-    return `${transfer.fromName} -> ${transfer.toName}: ${formatCurrency(transfer.amount, language)}`;
+    return `${transfer.fromName} -> ${transfer.toName}: ${formatKRW(transfer.amount)}`;
   });
 
   if (transfers.length > 10) {
