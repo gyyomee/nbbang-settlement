@@ -23,6 +23,45 @@ export const appTranslations: Record<
   },
 };
 
+export const helpDialogTranslations = {
+  ko: {
+    title: "도움말",
+    closeLabel: "닫기",
+    introBody:
+      "모임에서 여러 사람이 번갈아 결제했다면 결제자, 금액, 정산 대상을 입력해보세요. 누가 누구에게 얼마를 보내야 하는지 계산하고, 송금 횟수가 적은 정산 방법을 알려드려요. 별도의 총무 없이도 간편하게 정산할 수 있습니다.",
+    joinTitle: "정산 참여하기",
+    joinBody:
+      "홈에서 정산 코드를 입력한 뒤 내 이름을 선택하거나 새 이름으로 참여해요.",
+    expenseTitle: "결제 내역 추가하기",
+    expenseBody:
+      "결제 추가 버튼을 눌러 날짜, 결제자, 금액, 내역, 정산 대상을 입력해요.",
+    editTitle: "정산 정보 수정하기",
+    editBody:
+      "수정 버튼에서 정산 이름과 참여자를 관리하고, 결제 내역은 결제 내역의 수정 모드에서 바꿔요.",
+    shareTitle: "최종 정산 공유하기",
+    shareBody:
+      "최종 정산 결과의 카카오톡 공유 버튼으로 이체 결과를 바로 공유해요.",
+  },
+  en: {
+    title: "Help",
+    closeLabel: "Close",
+    introBody:
+      "When different people pay for different expenses, enter the payer, amount, and participants for each expense. The app calculates who should send money to whom and provides a settlement plan with fewer transfers, so the group can settle up without assigning one person as the treasurer.",
+    joinTitle: "How to join a settlement",
+    joinBody:
+      "Enter the settlement code on Home, then join as an existing participant or with a new name.",
+    expenseTitle: "How to add expenses",
+    expenseBody:
+      "Use the add expense button to enter the date, payer, amount, details, and split targets.",
+    editTitle: "How to edit settlement information",
+    editBody:
+      "Use the edit button to manage the settlement title and participants. Edit expense rows from Expense List edit mode.",
+    shareTitle: "How to share the final settlement",
+    shareBody:
+      "Use the KakaoTalk share button in Final Settlement Result to share transfer results.",
+  },
+} satisfies Record<Language, Record<string, string>>;
+
 export function isSupportedLanguage(value: string): value is Language {
   return supportedLanguages.includes(value as Language);
 }
@@ -261,7 +300,6 @@ export const expenseListTranslations = {
   ko: {
     title: "결제 내역",
     addExpenseButton: "결제 내역 추가",
-    expenseCount: (count: number) => `${count}건`,
     emptyMessage: "아직 추가된 결제 내역이 없어요.",
     expenseDateLabel: "결제 날짜",
     payerLabel: "결제자",
@@ -277,16 +315,14 @@ export const expenseListTranslations = {
     savingButton: "저장 중",
     saveEditButton: "수정 저장",
     cancelButton: "취소",
-    paidByLine: (payerName: string) => `결제: ${payerName}`,
-    targetLine: (participantNames: string) => `대상: ${participantNames}`,
+    payerMetadataLabel: "결제",
+    targetMetadataLabel: "대상",
     editButton: "수정",
     deleteButton: "삭제",
   },
   en: {
     title: "Expenses",
     addExpenseButton: "Add Expense",
-    expenseCount: (count: number) =>
-      `${count} ${count === 1 ? "item" : "items"}`,
     emptyMessage: "No expenses have been added yet.",
     expenseDateLabel: "Date",
     payerLabel: "Payer",
@@ -302,8 +338,8 @@ export const expenseListTranslations = {
     savingButton: "Saving",
     saveEditButton: "Save Edit",
     cancelButton: "Cancel",
-    paidByLine: (payerName: string) => `Paid by: ${payerName}`,
-    targetLine: (participantNames: string) => `Split with: ${participantNames}`,
+    payerMetadataLabel: "Paid by",
+    targetMetadataLabel: "For",
     editButton: "Edit",
     deleteButton: "Delete",
   },
@@ -341,6 +377,7 @@ export const settlementHeaderTranslations = {
   ko: {
     homeLabel: "홈",
     homeAriaLabel: "홈으로 이동",
+    helpLabel: "도움말",
     settlementCodeLabel: "정산 코드",
     copyButton: "복사",
     copiedButton: "복사됨",
@@ -354,6 +391,7 @@ export const settlementHeaderTranslations = {
   en: {
     homeLabel: "Home",
     homeAriaLabel: "Go Home",
+    helpLabel: "Help",
     settlementCodeLabel: "Split Code",
     copyButton: "Copy",
     copiedButton: "Copied",

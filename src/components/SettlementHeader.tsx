@@ -1,20 +1,24 @@
-import { Check, Copy, Home, Pencil, Save } from "lucide-react";
+import { Check, CircleHelp, Copy, Home, Pencil, Save } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { settlementHeaderTranslations, useCurrentLanguage } from "../i18n";
 import type { Settlement } from "../types";
 
 const SETTLEMENT_TITLE_MAX_LENGTH = 30;
+const TOP_NAV_ICON_CLASS =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-none border border-receipt-line bg-white/70 p-0 text-receipt-ink shadow-key transition hover:-translate-y-0.5 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-receipt-ink active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function SettlementHeader({
   isManagingSettlement,
   onFinishManagement,
+  onOpenHelp,
   onStartManagement,
   onUpdateSettlementName,
   settlement,
 }: {
   isManagingSettlement: boolean;
   onFinishManagement: () => void;
+  onOpenHelp: () => void;
   onStartManagement: () => void;
   onUpdateSettlementName: (settlementName: string) => Promise<void>;
   settlement: Settlement;
@@ -77,29 +81,46 @@ export default function SettlementHeader({
   return (
     <header className="space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link className="tiny-button" to="/" aria-label={t.homeAriaLabel}>
-            <Home size={15} aria-hidden="true" />
-            {t.homeLabel}
+        <div className="flex items-center gap-1.5">
+          <Link
+            className={TOP_NAV_ICON_CLASS}
+            to="/"
+            aria-label={t.homeAriaLabel}
+            title={t.homeLabel}
+          >
+            <Home size={16} aria-hidden="true" />
           </Link>
           <button
-            className="tiny-button"
+            className={TOP_NAV_ICON_CLASS}
             type="button"
-            onClick={
-              isManagingSettlement ? onFinishManagement : onStartManagement
-            }
+            aria-label={t.helpLabel}
+            title={t.helpLabel}
+            onClick={onOpenHelp}
           >
-            {isManagingSettlement ? (
-              <Check size={15} aria-hidden="true" />
-            ) : (
-              <Pencil size={15} aria-hidden="true" />
-            )}
-            {isManagingSettlement
-              ? t.finishManagementButton
-              : t.manageSettlementButton}
+            <CircleHelp size={16} aria-hidden="true" />
           </button>
         </div>
-        <span className="text-xs font-bold text-receipt-muted">NBBANG POS</span>
+        <button
+          className={TOP_NAV_ICON_CLASS}
+          type="button"
+          aria-label={
+            isManagingSettlement
+              ? t.finishManagementButton
+              : t.manageSettlementButton
+          }
+          title={
+            isManagingSettlement
+              ? t.finishManagementButton
+              : t.manageSettlementButton
+          }
+          onClick={isManagingSettlement ? onFinishManagement : onStartManagement}
+        >
+          {isManagingSettlement ? (
+            <Check size={16} aria-hidden="true" />
+          ) : (
+            <Pencil size={16} aria-hidden="true" />
+          )}
+        </button>
       </div>
 
       <div className="text-center">

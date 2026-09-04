@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { useState } from "react";
 import {
   kakaoSettlementShareTranslations,
@@ -7,6 +7,7 @@ import {
 import type { SettlementTransfer } from "../types";
 import { KAKAO_SHARE_RESULT_IMAGE_PATH, shareKakao } from "../utils/kakao";
 import { buildSettlementShareDescription } from "../utils/settlement";
+import ActionIconButton from "./ActionIconButton";
 
 export default function KakaoSettlementShareButton({
   transfers,
@@ -35,9 +36,13 @@ export default function KakaoSettlementShareButton({
   }
 
   return (
-    <button className="key-button w-full" type="button" onClick={handleShare} disabled={sharing}>
-      <Send size={17} aria-hidden="true" />
-      {sharing ? t.sharingButton : t.shareButton}
-    </button>
+    <ActionIconButton
+      ariaLabel="카카오톡 공유"
+      tooltip="카카오톡 공유"
+      onClick={handleShare}
+      disabled={sharing}
+    >
+      <MessageCircle size={16} aria-hidden="true" />
+    </ActionIconButton>
   );
 }

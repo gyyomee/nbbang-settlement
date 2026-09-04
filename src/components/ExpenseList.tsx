@@ -1,5 +1,6 @@
 import {
   CheckSquare,
+  Copy,
   Pencil,
   Plus,
   Save,
@@ -14,8 +15,14 @@ import {
   useCurrentLanguage,
 } from "../i18n";
 import type { Expense, Participant } from "../types";
+import {
+  buildClipboardHtmlTable,
+  sanitizeTableCell,
+  writeTableToClipboard,
+} from "../utils/clipboardTable";
 import { formatDateLabel, formatKRW, formatNumber } from "../utils/format";
 import { toPositiveInteger } from "../utils/validation";
+import ActionIconButton from "./ActionIconButton";
 import AmountInput from "./AmountInput";
 
 export interface ExpenseEditValues {
@@ -37,6 +44,7 @@ type ExpenseListError = { key: ExpenseListErrorKey } | { message: string };
 export default function ExpenseList({
   expenses,
   participants,
+  settlementName,
   onAddExpense,
   addExpenseDisabled = false,
   onUpdate,
@@ -44,6 +52,7 @@ export default function ExpenseList({
 }: {
   expenses: Expense[];
   participants: Participant[];
+  settlementName: string;
   onAddExpense?: () => void;
   addExpenseDisabled?: boolean;
   onUpdate: (expenseId: string, values: ExpenseEditValues) => Promise<void>;
@@ -61,6 +70,8 @@ export default function ExpenseList({
   >([]);
   const [editError, setEditError] = useState<ExpenseListError | null>(null);
   const [savingExpenseId, setSavingExpenseId] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [isManagingExpenses, setIsManagingExpenses] = useState(false);
   const groupedExpenses = expenses.reduce<Record<string, Expense[]>>(
     (groups, expense) => {
       groups[expense.expenseDate] = [
@@ -72,6 +83,7 @@ export default function ExpenseList({
     {},
   );
   const dates = Object.keys(groupedExpenses).sort((a, b) => a.localeCompare(b));
+  const expensesForCopy = dates.flatMap((date) => groupedExpenses[date]);
 
   function startEditing(expense: Expense) {
     setEditingExpenseId(expense.id);
@@ -86,6 +98,14 @@ export default function ExpenseList({
   function cancelEditing() {
     setEditingExpenseId(null);
     setEditError(null);
+  }
+
+  function toggleExpenseManagement() {
+    if (isManagingExpenses) {
+      cancelEditing();
+    }
+
+    setIsManagingExpenses(!isManagingExpenses);
   }
 
   function toggleEditTarget(participantId: string) {
@@ -143,28 +163,61 @@ export default function ExpenseList({
     }
   }
 
+  async function handleCopyTable() {
+    try {
+      await writeTableToClipboard(
+        buildExpenseClipboardContent(settlementName, expensesForCopy),
+      );
+      showCopyMessage("표를 복사했어요.");
+    } catch {
+      showCopyMessage("표 복사에 실패했어요.");
+    }
+  }
+
+  function showCopyMessage(message: string) {
+    setCopyMessage(message);
+    window.setTimeout(() => setCopyMessage(""), 1800);
+  }
+
   return (
     <section className="receipt-section space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-black">{t.title}</h2>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-receipt-muted">
-            {t.expenseCount(expenses.length)}
-          </span>
+        <div className="flex shrink-0 items-center gap-1.5">
           {onAddExpense ? (
-            <button
-              className="tiny-button h-11 w-11 shrink-0 p-0 disabled:cursor-not-allowed disabled:opacity-50"
-              type="button"
-              aria-label={t.addExpenseButton}
-              title={t.addExpenseButton}
+            <ActionIconButton
+              ariaLabel="결제 추가"
+              tooltip="결제 추가"
               onClick={onAddExpense}
               disabled={addExpenseDisabled}
             >
-              <Plus size={18} aria-hidden="true" />
-            </button>
+              <Plus size={17} aria-hidden="true" />
+            </ActionIconButton>
           ) : null}
+          <ActionIconButton
+            ariaLabel="복사"
+            tooltip="복사"
+            onClick={handleCopyTable}
+            disabled={expenses.length === 0}
+          >
+            <Copy size={16} aria-hidden="true" />
+          </ActionIconButton>
+          <ActionIconButton
+            ariaLabel={t.editButton}
+            tooltip={t.editButton}
+            onClick={toggleExpenseManagement}
+            disabled={expenses.length === 0 || Boolean(savingExpenseId)}
+          >
+            <Pencil size={16} aria-hidden="true" />
+          </ActionIconButton>
         </div>
       </div>
+
+      {copyMessage ? (
+        <p className="text-xs font-bold leading-5 text-receipt-muted">
+          {copyMessage}
+        </p>
+      ) : null}
 
       {expenses.length === 0 ? (
         <p className="text-sm leading-6 text-receipt-muted">
@@ -179,7 +232,8 @@ export default function ExpenseList({
               </h3>
               <ul className="space-y-2">
                 {groupedExpenses[date].map((expense) => {
-                  const isEditing = editingExpenseId === expense.id;
+                  const isEditing =
+                    isManagingExpenses && editingExpenseId === expense.id;
                   const saving = savingExpenseId === expense.id;
 
                   return (
@@ -370,39 +424,38 @@ export default function ExpenseList({
                               <p className="break-words text-sm font-black">
                                 {expense.description}
                               </p>
-                              <p className="mt-1 text-xs leading-5 text-receipt-muted">
-                                {t.paidByLine(expense.payerName)}
+                              <p className="mt-1 min-w-0 break-words text-xs leading-5 text-receipt-muted">
+                                {t.payerMetadataLabel} {expense.payerName} ·{" "}
+                                {t.targetMetadataLabel}{" "}
+                                {expense.targetParticipantNames.join(", ")}
                               </p>
                             </div>
                             <p className="amount text-sm font-black">
                               {formatKRW(expense.amount)}
                             </p>
                           </div>
-                          <div className="mt-3 flex items-end justify-between gap-3">
-                            <p className="min-w-0 text-xs leading-5 text-receipt-muted">
-                              {t.targetLine(
-                                expense.targetParticipantNames.join(", "),
-                              )}
-                            </p>
-                            <div className="flex shrink-0 gap-2">
-                              <button
-                                className="tiny-button"
-                                type="button"
-                                onClick={() => startEditing(expense)}
-                              >
-                                <Pencil size={14} aria-hidden="true" />
-                                {t.editButton}
-                              </button>
-                              <button
-                                className="tiny-button"
-                                type="button"
-                                onClick={() => onDelete(expense.id)}
-                              >
-                                <Trash2 size={14} aria-hidden="true" />
-                                {t.deleteButton}
-                              </button>
+                          {isManagingExpenses ? (
+                            <div className="mt-3 flex justify-end">
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  className="tiny-button"
+                                  type="button"
+                                  onClick={() => startEditing(expense)}
+                                >
+                                  <Pencil size={14} aria-hidden="true" />
+                                  {t.editButton}
+                                </button>
+                                <button
+                                  className="tiny-button"
+                                  type="button"
+                                  onClick={() => onDelete(expense.id)}
+                                >
+                                  <Trash2 size={14} aria-hidden="true" />
+                                  {t.deleteButton}
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          ) : null}
                         </>
                       )}
                     </li>
@@ -426,6 +479,35 @@ function getExpenseListErrorText(
   }
 
   return translations[error.key];
+}
+
+function buildExpenseClipboardContent(settlementName: string, expenses: Expense[]) {
+  const headers = ["날짜", "내역", "결제자", "총 금액", "정산 대상"];
+  const rows = expenses.map((expense) => [
+    expense.expenseDate,
+    sanitizeTableCell(expense.description),
+    sanitizeTableCell(expense.payerName),
+    formatKRW(expense.amount),
+    sanitizeTableCell(expense.targetParticipantNames.join(", ")),
+  ]);
+  const plainText = [
+    settlementName,
+    "",
+    "[결제 내역]",
+    "",
+    headers.join("\t"),
+    ...rows.map((row) => row.join("\t")),
+  ].join("\n");
+
+  return {
+    html: buildClipboardHtmlTable({
+      headers,
+      rows,
+      sectionTitle: "[결제 내역]",
+      title: settlementName,
+    }),
+    plainText,
+  };
 }
 
 function formatExpenseListDateLabel(dateValue: string, language: Language) {

@@ -15,11 +15,16 @@ export default function SettlementResult({
 
   return (
     <section className="receipt-section space-y-5">
-      <div>
-        <h2 className="text-base font-black">{t.title}</h2>
-        <p className="mt-1 text-xs leading-5 text-receipt-muted">
-          {t.remainderNote}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-black">{t.title}</h2>
+          <p className="mt-1 text-xs leading-5 text-receipt-muted">
+            {t.remainderNote}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <KakaoSettlementShareButton transfers={transfers} />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -89,7 +94,6 @@ export default function SettlementResult({
         )}
       </div>
 
-      <KakaoSettlementShareButton transfers={transfers} />
     </section>
   );
 }

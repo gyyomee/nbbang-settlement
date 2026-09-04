@@ -55,7 +55,11 @@ import InvalidSettlementPage from "./InvalidSettlementPage";
 const SELF_DELETE_BLOCKED_MESSAGE =
   "내 참여자 정보는 삭제할 수 없습니다. 이름 변경만 가능합니다.";
 
-export default function SettlementPage() {
+export default function SettlementPage({
+  onOpenHelp,
+}: {
+  onOpenHelp: () => void;
+}) {
   const navigate = useNavigate();
   const language = useCurrentLanguage();
   const t = settlementPageTranslations[language];
@@ -640,6 +644,7 @@ export default function SettlementPage() {
         <SettlementHeader
           settlement={activeSettlement}
           isManagingSettlement={isManagingSettlement}
+          onOpenHelp={onOpenHelp}
           onStartManagement={() => setIsManagingSettlement(true)}
           onFinishManagement={() => setIsManagingSettlement(false)}
           onUpdateSettlementName={handleUpdateSettlementName}
@@ -749,6 +754,7 @@ export default function SettlementPage() {
         <ExpenseList
           expenses={expenses}
           participants={participants}
+          settlementName={activeSettlement.settlementName}
           onAddExpense={() => setIsExpenseFormOpen(true)}
           addExpenseDisabled={isExpenseFormOpen || loadingCollections}
           onUpdate={handleUpdateExpense}
